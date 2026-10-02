@@ -664,8 +664,16 @@ termkey_load_terminfo(TermKeyTI *ti)
 		if (failed) break;
 	}
 
-	/* Finally mouse mode */
-	termkey_try_load_terminfo_key(ti, "key_mouse", (TermKeyKeyInfo){.type = TERMKEY_TYPE_MOUSE});
+	/* Finally mouse mode. Terminfo entries such as xterm-256color advertise
+	 * key_mouse as the SGR introducer "\E[<" rather than the X10 "\E[M".
+	 * The trie handler assumes a fixed three byte X10 payload, so registering
+	 * the SGR prefix would truncate every SGR report before the CSI parser
+	 * (termkey_handle_csi_m) gets to see it. Leave SGR to the CSI parser. */
+	const char *key_mouse = ti->unibi ? termkey_unibi_get_str_by_name(ti->unibi, "key_mouse") : 0;
+	bool key_mouse_is_sgr = key_mouse && key_mouse != (char *)-1 && key_mouse[0]
+	                        && key_mouse[strlen(key_mouse) - 1] == '<';
+	if (!key_mouse_is_sgr)
+		termkey_try_load_terminfo_key(ti, "key_mouse", (TermKeyKeyInfo){.type = TERMKEY_TYPE_MOUSE});
 
 	/* Take copies of these terminfo strings, in case we build multiple termkey
 	 * instances for multiple different termtypes, and it's different by the
