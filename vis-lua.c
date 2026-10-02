@@ -3718,6 +3718,28 @@ static void vis_lua_term_csi(Vis *vis, const long *csi) {
 	}
 	lua_pop(L, 1);
 }
+
+/***
+ * Mouse event received from terminal, see README.mouse.md.
+ * @function mouse
+ * @tparam int type the kind of event: 1 press, 2 drag, 3 release, 0 unknown
+ * @tparam int button the button involved, 0 when unknown
+ * @tparam int line 1-based terminal row
+ * @tparam int col 1-based terminal column
+ */
+static void vis_lua_mouse(Vis *vis, const UiMouseEvent *event) {
+	lua_State *L = vis->lua;
+	vis_lua_event_get(L, "mouse");
+	if (lua_isfunction(L, -1)) {
+		lua_pushinteger(L, event->type);
+		lua_pushinteger(L, event->button);
+		lua_pushinteger(L, event->line);
+		lua_pushinteger(L, event->col);
+		pcall(vis, L, 4, 0);
+	}
+	lua_pop(L, 1);
+}
+
 /***
  * The response received from the process started via @{vis:communicate}.
  * @function process_response
@@ -3825,6 +3847,9 @@ bool vis_event_emit(Vis *vis, enum VisEvents id, ...) {
 		break;
 	case VIS_EVENT_UI_DRAW:
 		vis_lua_ui_draw(vis);
+		break;
+	case VIS_EVENT_MOUSE:
+		vis_lua_mouse(vis, va_arg(ap, const UiMouseEvent *));
 		break;
 	}
 

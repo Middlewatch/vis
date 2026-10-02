@@ -1207,6 +1207,16 @@ static const char *getkey(Vis *vis) {
 		}
 		return getkey(vis);
 	}
+	if (key.type == TERMKEY_TYPE_MOUSE) {
+		/* see README.mouse.md */
+		TermKeyMouseEvent type;
+		UiMouseEvent event;
+		if (termkey_interpret_mouse(termkey, &key, &type, &event.button, &event.line, &event.col) == TERMKEY_RES_KEY) {
+			event.type = type;
+			vis_event_emit(vis, VIS_EVENT_MOUSE, &event);
+		}
+		return getkey(vis);
+	}
 	termkey_strfkey(termkey, vis->key, sizeof(vis->key), &key, TERMKEY_FORMAT_VIM);
 	return vis->key;
 }

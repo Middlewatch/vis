@@ -79,6 +79,14 @@ typedef alignas(8) struct {
 	u8 fg_r, fg_g, fg_b;
 	u8 bg_r, bg_g, bg_b;
 } VisCellStyle;
+
+/* A terminal mouse event as parsed by termkey, see README.mouse.md */
+typedef struct {
+	int type;   /* TermKeyMouseEvent: press, drag, release or unknown */
+	int button; /* 1..5, or 0 when unknown */
+	int line;   /* 1-based terminal row */
+	int col;    /* 1-based terminal column */
+} UiMouseEvent;
 #define VisCellStyleFGIndexGet(v)        (((u16)(v)->fg_r << 8u) | (v)->fg_g)
 #define VisCellStyleBGIndexGet(v)        (((u16)(v)->bg_g << 8u) | (v)->bg_b)
 #define VisCellStyleFGIndexSet(v, index) ((v)->fg_r = ((index >> 8u) & 0xFFu), ((v)->fg_g = (index) & 0xFFu))

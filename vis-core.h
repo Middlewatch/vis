@@ -277,6 +277,7 @@ enum VisEvents {
 	VIS_EVENT_WIN_STATUS,
 	VIS_EVENT_TERM_CSI,
 	VIS_EVENT_UI_DRAW,
+	VIS_EVENT_MOUSE, /* see README.mouse.md */
 };
 
 VIS_INTERNAL bool vis_event_emit(Vis*, enum VisEvents, ...);
