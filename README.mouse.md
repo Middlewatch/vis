@@ -121,6 +121,29 @@ holds the style strings and `modeline.symbols` the glyphs; set them in
 `visrc.lua` before the first redraw. `modeline.enabled = false` returns
 the bar to the default handler.
 
+## Leader hints
+
+`lua/vis-hints.lua` is the which-key replacement, the first consumer of
+`KEYS_PENDING` and the overlay:
+
+    hints = require('vis-hints')
+
+On a pending prefix it lists the bindings under that prefix from
+`vis:mappings(vis.mode)` in a box just above the status line: a title row
+with the prefix and its group name, then the entries in columns, each the
+next key and either its help text or `+group` when more keys follow.
+Help longer than `hints.text_width` cells is cut so several columns
+fit, and at most `hints.max_rows` rows are drawn, the rest counted in
+the title. Group names live in `hints.groups`, keyed by the full sequence; a typed
+space reaches the mappings as a literal `" "`, so leader bindings are
+mapped as `" ff"`, `" bd"` and so on, and `hints.leader` is that string.
+By default only prefixes starting with the leader open the box
+(`hints.triggers`); set it to `nil` for every prefix, `g` and `<C-w>`
+included. The box goes when the prefix resolves or is abandoned. There is
+no delay: vis has no timer, so the box appears on the first key. Terminal
+size comes from `vis.ui.width` and `vis.ui.height`, a one-line addition
+in `vis-lua.c` that the box needs to anchor itself to the bottom.
+
 Nothing is reported until something enables mouse tracking in the
 terminal. `lua/vis-mouse.lua` does that on `START` (`\e[?1003h` for all
 motion, `\e[?1006h` for SGR encoding) and turns it off on `QUIT`.
