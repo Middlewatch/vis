@@ -21,3 +21,8 @@ make
 make install
 printf 'installed: '
 "$PREFIX/bin/vis" -v
+# LPeg is loaded at run time; without it vis starts but nothing is
+# highlighted. Probe through the Lua interpreter when one is present.
+if command -v lua >/dev/null 2>&1 && ! lua -e 'require "lpeg"' >/dev/null 2>&1; then
+	echo "bin/install: lpeg not found for $(lua -v 2>&1 | cut -d' ' -f1-2); install lua-lpeg" >&2
+fi
