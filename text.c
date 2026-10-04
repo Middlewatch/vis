@@ -96,6 +96,8 @@ struct Text {
 	size_t size;            /* current file content size in bytes */
 	struct stat info;       /* stat as probed at load time */
 	LineCache lines;        /* mapping between absolute pos in bytes and logical line breaks */
+	TextChangeHook on_change; /* called around every modification, see text_on_change() */
+	void *on_change_ctx;
 };
 
 #include "text-common.c"
@@ -426,7 +428,7 @@ static void text_change_free(TextChange *c) {
  *      | |     |short|     | existing text |     | |
  *      \-+ <-- +-----+ <-- +---------------+ <-- +-/
  */
-bool text_insert(Vis *vis, Text *txt, size_t pos, const void *data, size_t len)
+static bool text_insert_intern(Vis *vis, Text *txt, size_t pos, const void *data, size_t len)
 {
 	if (len == 0)
 		return true;
@@ -484,6 +486,28 @@ bool text_insert(Vis *vis, Text *txt, size_t pos, const void *data, size_t len)
 	return true;
 }
 
+bool text_insert(Vis *vis, Text *txt, size_t pos, const void *data, size_t len)
+{
+	bool result = text_insert_intern(vis, txt, pos, data, len);
+	if (result && len && txt->on_change)
+		txt->on_change(txt->on_change_ctx, txt, pos, 0, data, len);
+	return result;
+}
+
+void text_on_change(Text *txt, TextChangeHook hook, void *ctx)
+{
+	txt->on_change     = hook;
+	txt->on_change_ctx = ctx;
+}
+
+/* report a modification whose range is not known, e.g. undo */
+static size_t text_changed_unknown(Text *txt, size_t pos)
+{
+	if (pos != EPOS && txt->on_change)
+		txt->on_change(txt->on_change_ctx, txt, EPOS, 0, NULL, 0);
+	return pos;
+}
+
 static size_t revision_undo(Text *txt, Revision *rev) {
 	size_t pos = EPOS;
 	for (TextChange *c = rev->change; c; c = c->next) {
@@ -517,7 +541,7 @@ size_t text_undo(Text *txt) {
 	pos = revision_undo(txt, txt->history);
 	txt->history = rev;
 	lineno_cache_invalidate(&txt->lines);
-	return pos;
+	return text_changed_unknown(txt, pos);
 }
 
 size_t text_redo(Text *txt) {
@@ -530,7 +554,7 @@ size_t text_redo(Text *txt) {
 	pos = revision_redo(txt, rev);
 	txt->history = rev;
 	lineno_cache_invalidate(&txt->lines);
-	return pos;
+	return text_changed_unknown(txt, pos);
 }
 
 static bool history_change_branch(Revision *rev) {
@@ -574,11 +598,11 @@ static size_t history_traverse_to(Text *txt, Revision *rev) {
 }
 
 size_t text_earlier(Text *txt) {
-	return history_traverse_to(txt, txt->history->earlier);
+	return text_changed_unknown(txt, history_traverse_to(txt, txt->history->earlier));
 }
 
 size_t text_later(Text *txt) {
-	return history_traverse_to(txt, txt->history->later);
+	return text_changed_unknown(txt, history_traverse_to(txt, txt->history->later));
 }
 
 size_t text_restore(Text *txt, time_t time) {
@@ -592,7 +616,7 @@ size_t text_restore(Text *txt, time_t time) {
 		rev = rev->earlier;
 	if (rev->later && rev->later != txt->history && labs(rev->later->time - time) < diff)
 		rev = rev->later;
-	return history_traverse_to(txt, rev);
+	return text_changed_unknown(txt, history_traverse_to(txt, rev));
 }
 
 time_t text_state(const Text *txt) {
@@ -655,7 +679,7 @@ struct stat text_stat(const Text *txt) {
  *      | |     | exi|     |t |     | |
  *      \-+ <-- +----+ <-- +--+ <-- +-/
  */
-bool text_delete(Text *txt, size_t pos, size_t len) {
+static bool text_delete_intern(Text *txt, size_t pos, size_t len) {
 	if (len == 0)
 		return true;
 	size_t pos_end;
@@ -736,6 +760,18 @@ bool text_delete(Text *txt, size_t pos, size_t len) {
 	span_init(&c->old, start, end);
 	span_swap(txt, &c->old, &c->new);
 	return true;
+}
+
+bool text_delete(Text *txt, size_t pos, size_t len)
+{
+	if (len == 0)
+		return true;
+	size_t pos_end;
+	if (!addu(pos, len, &pos_end) || pos_end > txt->size)
+		return false;
+	if (txt->on_change)
+		txt->on_change(txt->on_change_ctx, txt, pos, len, NULL, 0);
+	return text_delete_intern(txt, pos, len);
 }
 
 bool text_delete_range(Text *txt, Filerange r)

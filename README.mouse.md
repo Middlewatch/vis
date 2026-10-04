@@ -56,6 +56,36 @@ routes a single click there to `mouse.overlay_click(row, state)` instead
 of moving the cursor. Completion lists, hint menus, hover text, context
 menus and pickers are all meant to draw through it.
 
+## Status segments
+
+`win:status(left, right)` still takes two strings. Either part may also
+be a list of segments, each a string or a `{text, style_id}` table:
+
+    win:status({ {" NORMAL ", mode_id}, " " .. win.file.name },
+               { {"12:3", pos_id} })
+
+Plain text takes the status style. A segment style is merged over it, so
+a style setting only `fore` keeps the status background; with the
+default theme's `reverse` status set both `fore` and `back`. The C side
+is one primitive, `ui_window_status_segment`, which paints a run of
+cells in a style; the Lua binding does the layout.
+
+## Text changed event
+
+`vis.events.TEXT_CHANGED` fires for every modification of a non-internal
+file:
+
+    text_changed(file, pos, deleted, inserted)
+
+For an insertion it arrives after the data is in place with `deleted`
+0. For a deletion it arrives before the bytes go, with `inserted` `nil`,
+so `file:content(pos, deleted)` still returns them and a handler can
+turn the range into line and column coordinates. After undo, redo,
+`:earlier` or `:later` it arrives once with `pos` `nil`: the range is
+unknown and the file should be reread. Do not modify the file from the
+handler. The hook lives in `text.c` (`text_on_change`), so every path
+that edits a `Text` reports, including sam commands and Lua `file:insert`.
+
 Nothing is reported until something enables mouse tracking in the
 terminal. `lua/vis-mouse.lua` does that on `START` (`\e[?1003h` for all
 motion, `\e[?1006h` for SGR encoding) and turns it off on `QUIT`.

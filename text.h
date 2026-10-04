@@ -133,6 +133,17 @@ VIS_INTERNAL bool text_modified(const Text*);
  */
 VIS_INTERNAL bool text_insert(Vis *vis, Text *txt, size_t pos, const void *data, size_t len);
 /**
+ * Called around every modification. For an insertion it runs after the
+ * data is in place with ``deleted == 0``. For a deletion it runs before the
+ * bytes go, with ``inserted == NULL``, so the handler can still read them.
+ * After undo, redo or a history traversal it runs once with ``pos == EPOS``
+ * meaning the changed range is unknown.
+ */
+typedef void (*TextChangeHook)(void *ctx, Text *txt, size_t pos, size_t deleted,
+                               const char *inserted, size_t inserted_len);
+/** Install the change hook, replacing any previous one. */
+VIS_INTERNAL void text_on_change(Text *txt, TextChangeHook hook, void *ctx);
+/**
  * Delete data at given byte position.
  *
  * @param txt The text instance to modify.

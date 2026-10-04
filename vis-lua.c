@@ -3943,6 +3943,46 @@ static void vis_lua_mouse(Vis *vis, const UiMouseEvent *event) {
 }
 
 /***
+ * File content changed, see `text_on_change()` in text.h.
+ *
+ * For an insertion the event arrives after the data is in place, with
+ * `deleted` 0. For a deletion it arrives before the bytes go, with
+ * `inserted` `nil`, so `file:content(pos, deleted)` still returns them.
+ * After undo, redo or `:earlier` / `:later` it arrives once with `pos`
+ * `nil`: the changed range is unknown and the file should be reread.
+ * Do not modify the file from this handler.
+ *
+ * @function text_changed
+ * @tparam File file the affected file
+ * @tparam int pos the byte position of the change, or `nil`
+ * @tparam int deleted the number of bytes removed at `pos`
+ * @tparam string inserted the bytes inserted at `pos`, or `nil`
+ */
+static void vis_lua_text_changed(Vis *vis, Text *txt, size_t pos, size_t deleted, const char *inserted, size_t inserted_len) {
+	File *file = vis->files;
+	while (file && (file->internal || file->text != txt))
+		file = file->next;
+	if (!file)
+		return;
+	lua_State *L = vis->lua;
+	vis_lua_event_get(L, "text_changed");
+	if (lua_isfunction(L, -1)) {
+		obj_ref_new(L, file, VIS_LUA_TYPE_FILE);
+		if (pos == EPOS)
+			lua_pushnil(L);
+		else
+			lua_pushinteger(L, pos);
+		lua_pushinteger(L, deleted);
+		if (inserted)
+			lua_pushlstring(L, inserted, inserted_len);
+		else
+			lua_pushnil(L);
+		pcall(vis, L, 4, 0);
+	}
+	lua_pop(L, 1);
+}
+
+/***
  * The response received from the process started via @{vis:communicate}.
  * @function process_response
  * @tparam string name the name of process given to @{vis:communicate}
@@ -4053,6 +4093,14 @@ bool vis_event_emit(Vis *vis, enum VisEvents id, ...) {
 	case VIS_EVENT_MOUSE:
 		vis_lua_mouse(vis, va_arg(ap, const UiMouseEvent *));
 		break;
+	case VIS_EVENT_TEXT_CHANGED: {
+		Text *txt = va_arg(ap, Text *);
+		size_t pos = va_arg(ap, size_t);
+		size_t deleted = va_arg(ap, size_t);
+		const char *inserted = va_arg(ap, const char *);
+		size_t inserted_len = va_arg(ap, size_t);
+		vis_lua_text_changed(vis, txt, pos, deleted, inserted, inserted_len);
+	} break;
 	}
 
 	va_end(ap);

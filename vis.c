@@ -73,6 +73,12 @@ typedef enum {
 	VisFileNewFlag_NoRefcount = (1 << 2),
 } VisFileNewFlags;
 
+static void
+vis_text_changed(void *ctx, Text *txt, size_t pos, size_t deleted, const char *inserted, size_t inserted_len)
+{
+	vis_event_emit(ctx, VIS_EVENT_TEXT_CHANGED, txt, pos, deleted, inserted, inserted_len);
+}
+
 VIS_INTERNAL File *
 vis_file_new(Vis *vis, const char *name, VisFileNewFlags flags)
 {
@@ -121,8 +127,10 @@ vis_file_new(Vis *vis, const char *name, VisFileNewFlags flags)
 			char cwd_buffer[PATH_MAX];
 			vis_file_set_name_relative(result, vis_current_directory(cwd_buffer, countof(cwd_buffer)));
 
-			if (!result->internal)
+			if (!result->internal) {
+				text_on_change(text, vis_text_changed, vis);
 				vis_event_emit(vis, VIS_EVENT_FILE_OPEN, result);
+			}
 		}
 
 		if (!result) {
