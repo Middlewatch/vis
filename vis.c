@@ -1109,8 +1109,8 @@ static void vis_keys_pending(Vis *vis, const char *prefix)
 	vis_event_emit(vis, VIS_EVENT_KEYS_PENDING, pending ? prefix : NULL);
 }
 
-VIS_INTERNAL void
-vis_keys_process(Vis *vis, s64 pos)
+static void
+vis_keys_process_internal(Vis *vis, s64 pos)
 {
 	Buffer *buf = &vis->input_queue;
 	// TODO(rnp): none of this function should need 0 termination
@@ -1226,6 +1226,14 @@ vis_keys_process(Vis *vis, s64 pos)
 }
 
 VIS_INTERNAL void
+vis_keys_process(Vis *vis, s64 pos)
+{
+	vis->keys_depth++;
+	vis_keys_process_internal(vis, pos);
+	vis->keys_depth--;
+}
+
+VIS_INTERNAL void
 vis_keys_push(Vis *vis, str8 input, s64 pos, bool record)
 {
 	if (input.length > 0) {
@@ -1241,7 +1249,9 @@ vis_keys_push(Vis *vis, str8 input, s64 pos, bool record)
 VIS_INTERNAL void
 macro_replay_internal(Vis *vis, Macro *macro)
 {
-	s64 pos = vis->input_queue.length;
+	/* fed from a key handler, the keys follow the ones being processed;
+	 * fed from outside (a mouse handler), they continue a pending prefix */
+	s64 pos = vis->keys_depth ? vis->input_queue.length : 0;
 	for (char *key = (char *)buffer_content0(macro), *next; key; key = next) {
 		next = (char *)vis_keys_next(vis, key);
 

@@ -211,6 +211,7 @@ struct Vis {
 	char key_prev[VIS_KEY_LENGTH_MAX];   /* previous key which was processed by the input queue */
 	Buffer input_queue;                  /* holds pending input keys */
 	bool keys_pending;                   /* whether a KEYS_PENDING prefix was reported and not yet cleared */
+	int keys_depth;                      /* nesting of vis_keys_process(), 0 outside key processing */
 	bool errorhandler;                   /* whether we are currently in an error handler, used to avoid recursion */
 	Action action;                       /* current action which is in progress */
 	Action action_prev;                  /* last operator action used by the repeat (dot) command */

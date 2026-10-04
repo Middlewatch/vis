@@ -123,7 +123,9 @@ a binding or is abandoned. Keys a binding itself waits for (the character
 after `f`, the register after `"`) are not reported. The check runs at
 the end of `vis_keys_process` in `vis.c`, which already knows whether
 what remains in the input queue is ambiguous, so the event costs one flag
-on `Vis`. It is the hook for a which-key style hint menu: on a prefix,
+on `Vis`. Keys fed with `vis:feedkeys` from outside key processing (a
+mouse handler, say) continue a pending prefix rather than running after
+it; a nesting counter on `Vis` tells the two cases apart. It is the hook for a which-key style hint menu: on a prefix,
 draw the bindings under it from `vis:mappings` in the overlay; on `nil`,
 hide it.
 
