@@ -227,21 +227,23 @@ vis-lspc (see LSP below); without lspc the file's words still complete.
 
 The fork carries no LSP code. It uses vis-lspc
 (<https://codeberg.org/muhq/vis-lspc>, GPL-3.0; the GitHub repository is
-abandoned), cloned into `~/.config/vis/plugins/vis-lspc` and loaded with
+abandoned), copied into `~/.config/vis/plugins/vis-lspc` and loaded with
 `lspc = require('plugins/vis-lspc')`. The vet before adopting it: one
 maintainer with occasional contributors, commits every month or two
 through 2026-10, releases tagged, the LICENSE file is GPL-3 verbatim
 with a public-domain `json.lua`, and it needs only `vis:communicate`,
 which upstream has had since 0.9. The bus factor is the noted risk.
 
-The clone's `incremental-sync` branch holds one patch: when
+The copy carries two local patches. The first: when
 `vis.events.TEXT_CHANGED` exists and the server asked for incremental
 synchronization, each change goes out as one ranged `didChange` and the
 whole-file resend before every request is skipped; an undo marks the
 file stale and the next request sends it whole. Servers that want full
 synchronization and a vis without the event behave as before. The
-patch stays local: vis-lspc's README forbids contributions created or
-modified with an LLM, and this one was.
+second hands a request's raw method result to its `on_result`
+callback. Both stay local: vis-lspc's README forbids contributions
+created or modified with an LLM, and these were. The owner's dotfiles
+keep the copy as plain files with the patches beside it.
 
 Servers come from `PATH`. lspc preconfigures zls, lua-language-server,
 clangd, gopls and bash-language-server; `~/.config/vis/visrc.lua` adds
