@@ -118,7 +118,7 @@ end
 vis.events.subscribe(vis.events.QUIT, mouse.deactivate)
 
 -- set mouse.state appropriately and emit vis events for common operations
-function update_mouse_state(event, button, line, col)
+local function update_mouse_state(event, button, line, col)
 	state.last = state.current
 	state.current = {}
 	state.current.event = event
@@ -173,15 +173,15 @@ function update_mouse_state(event, button, line, col)
 end
 
 -- perform special double click actions
-function mouse.double_click(state)
-	if (state.current.button == BUTTON.WHEELUP or state.current.button == BUTTON.WHEELDOWN) then return end
-	if (state.current.chordbase ~= state.current.button) then return end
+function mouse.double_click(ms)
+	if (ms.current.button == BUTTON.WHEELUP or ms.current.button == BUTTON.WHEELDOWN) then return end
+	if (ms.current.chordbase ~= ms.current.button) then return end
 	-- double clicking, by default, selects the WORD under the cursor
 	-- If the cursor is on column 1, start a line selection
 	-- same if the cursor is on a newline
-	local win, guessedpos, where, row = focus_resolve(state.current)
+	local win, guessedpos, where, row = focus_resolve(ms.current)
 	if where == "overlay" then
-		if mouse.overlay_click then mouse.overlay_click(row, state.current) end
+		if mouse.overlay_click then mouse.overlay_click(row, ms.current) end
 		return
 	end
 	if not guessedpos then return end
@@ -198,28 +198,28 @@ function mouse.double_click(state)
 end
 
 -- called on mouse chord begin
-function mouse.chord(mouse)
-	if (mouse.button == BUTTON.WHEELUP or mouse.button == BUTTON.WHEELDOWN) then return end
+function mouse.chord(ms)
+	if (ms.current.button == BUTTON.WHEELUP or ms.current.button == BUTTON.WHEELDOWN) then return end
 	-- Do nothing. See mouse.chord_release instead.
 	vis:info("chord detect")
 end
 
 -- perform actions for single clicks
-function mouse.single_click(state)
+function mouse.single_click(ms)
 	-- wheel motions don't create release events and aren't clicks
-	if (state.current.button == BUTTON.WHEELUP) then
-		focus_resolve(state.current)
+	if (ms.current.button == BUTTON.WHEELUP) then
+		focus_resolve(ms.current)
 		vis:feedkeys("<C-y>")
 		return
-	elseif (state.current.button == BUTTON.WHEELDOWN) then
-		focus_resolve(state.current)
+	elseif (ms.current.button == BUTTON.WHEELDOWN) then
+		focus_resolve(ms.current)
 		vis:feedkeys("<C-e>")
 		return
 	end
 
-	local _, gpos, where, row = focus_resolve(state.current)
+	local _, gpos, where, row = focus_resolve(ms.current)
 	if where == "overlay" then
-		if mouse.overlay_click then mouse.overlay_click(row, state.current) end
+		if mouse.overlay_click then mouse.overlay_click(row, ms.current) end
 		return
 	end
 	if not gpos then return end
@@ -240,9 +240,9 @@ function mouse.single_click(state)
 end
 
 -- perform actions for when the mouse is moved with at least one button held down
-function mouse.dragged(state)
+function mouse.dragged(ms)
 	-- a drag stays in the window it started in
-	local win, pos = mouse.resolve(state.current)
+	local win, pos = mouse.resolve(ms.current)
 	if win ~= vis.win or not pos then return end
 	if (vis.win.selection.anchored == false) then
 		-- just started dragging
@@ -261,11 +261,11 @@ end
 
 -- perform actions on mouse release
 -- i.e.: call vis-clipboard if mouse.dragging = BUTTON.LEFT
-function mouse.release(state)
+function mouse.release(ms)
 	-- just movement, do nothing
-	if (state.current.button == 0) then return end
+	if (ms.current.button == 0) then return end
 
-	local action = state.current.chordbase
+	local action = ms.current.chordbase
 	local selection = vis.win.selection
 	local file = vis.win.file
 
@@ -275,9 +275,9 @@ function mouse.release(state)
 end
 
 -- a button that was pressed while another was held down has been released
-function mouse.chord_release(state)
-	local chordbase = state.current.chordbase
-	local button = state.lastclick.button
+function mouse.chord_release(ms)
+	local chordbase = ms.current.chordbase
+	local button = ms.lastclick.button
 	local selection = vis.win.selection
 	local file = vis.win.file
 

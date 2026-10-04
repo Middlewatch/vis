@@ -34,11 +34,11 @@ modeline.symbols = {
 	branch   = "\u{e0a0} ",
 	modified = " [+]",
 	readonly = " [RO]",
-	error    = "\u{f057} ",  --
-	warn     = "\u{f071} ",  --
-	info     = "\u{f05a} ",  -- 
-	hint     = "\u{f0eb} ",  -- 
-	lsp      = "\u{f085} ",  -- 
+	error    = "\u{f057} ",
+	warn     = "\u{f071} ",
+	info     = "\u{f05a} ",
+	hint     = "\u{f0eb} ",
+	lsp      = "\u{f085} ",
 }
 
 -- seconds between re-reads of .git/HEAD
