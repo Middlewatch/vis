@@ -153,6 +153,31 @@ no delay: vis has no timer, so the box appears on the first key. Terminal
 size comes from `vis.ui.width` and `vis.ui.height`, a one-line addition
 in `vis-lua.c` that the box needs to anchor itself to the bottom.
 
+## Completion
+
+`lua/vis-completion.lua` is the as-you-type list, drawn in the overlay
+under the word being typed:
+
+    completion = require('vis-completion')
+
+Typing a word character in INSERT opens it with the language server's
+items (through vis-lspc, when a server runs for the file) followed by
+words of the file; typing on narrows it. `<C-n>` and `<C-p>` walk the
+rows and past either end nothing is chosen again; `<Enter>` inserts the
+chosen item and stays a line break while nothing is chosen. A key that
+ends the word, or leaving INSERT, closes it; `<C-n>` on a closed list
+opens it by hand, and a server trigger character such as `.` opens it
+with the server's items alone. Server items arrive asynchronously and
+are filtered by the typed prefix on the client, case-insensitively;
+snippets lose their placeholders (`${1:x}` keeps `x`). Each row shows
+the label and its kind. Knobs: `completion.keys`, `completion.colors`,
+`completion.max_rows`, `completion.min_chars`, `completion.buffer_words`
+and `completion.max_scan` (files over that size give no buffer words).
+
+It needs `lspc.complete(win, on_result, trigger)` and the `on_result`
+request context, both on the fork's `incremental-sync` branch of
+vis-lspc (see LSP below); without lspc the file's words still complete.
+
 ## LSP
 
 The fork carries no LSP code. It uses vis-lspc

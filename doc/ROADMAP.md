@@ -123,5 +123,6 @@ hit test as `vis:win_at`, P2 overlay as `vis:overlay_show` and
 `vis.events.KEYS_PENDING`, F3 as `lua/vis-modeline.lua`, F4 as
 `lua/vis-hints.lua` with `vis.ui.width` and `vis.ui.height` added for it,
 F1 as vis-lspc in `~/.config/vis/plugins` with the incremental
-`didChange` patch on its `incremental-sync` branch (see
-`README.mouse.md`). Everything else is open.
+`didChange` patch on its `incremental-sync` branch, `win:coord` as the
+inverse of the hit test, F2 as `lua/vis-completion.lua` (see
+`README.mouse.md`). Open: F5 and F6.
