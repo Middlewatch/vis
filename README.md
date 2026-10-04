@@ -4,7 +4,9 @@
 > [martanne/vis](https://github.com/martanne/vis) exploring mouse-native
 > editing on top of vis's modal core: click, drag, wheel, and chords, with
 > the hit test moving into the editor rather than a plugin. See
-> [`README.mouse.md`](README.mouse.md). Everything below is upstream's README.
+> [`README.mouse.md`](README.mouse.md) for the mouse layer and
+> [`doc/ROADMAP.md`](doc/ROADMAP.md) for what the fork is building and why.
+> Everything below is upstream's README.
 
 [![Development discussion](https://img.shields.io/badge/email-~martanne%2Fdevel-black?logo=sourcehut)](https://lists.sr.ht/~martanne/devel)
 [![builds.sr.ht status](https://builds.sr.ht/~martanne/vis/commits.svg)](https://builds.sr.ht/~martanne/vis/commits?)
