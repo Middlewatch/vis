@@ -3983,6 +3983,31 @@ static void vis_lua_text_changed(Vis *vis, Text *txt, size_t pos, size_t deleted
 }
 
 /***
+ * A multi-key sequence is partly typed, or no longer is.
+ *
+ * Fires with the typed keys when they are a prefix of at least one binding
+ * in the current mode but no complete one, so the editor is waiting for
+ * more input. Fires once with `nil` when that prefix resolves to a binding
+ * or is abandoned. Keys a binding itself waits for (the character after
+ * `f`, the register after `"`) are not reported.
+ *
+ * @function keys_pending
+ * @tparam string prefix the pending keys, or `nil` once resolved
+ */
+static void vis_lua_keys_pending(Vis *vis, const char *prefix) {
+	lua_State *L = vis->lua;
+	vis_lua_event_get(L, "keys_pending");
+	if (lua_isfunction(L, -1)) {
+		if (prefix)
+			lua_pushstring(L, prefix);
+		else
+			lua_pushnil(L);
+		pcall(vis, L, 1, 0);
+	}
+	lua_pop(L, 1);
+}
+
+/***
  * The response received from the process started via @{vis:communicate}.
  * @function process_response
  * @tparam string name the name of process given to @{vis:communicate}
@@ -4101,6 +4126,9 @@ bool vis_event_emit(Vis *vis, enum VisEvents id, ...) {
 		size_t inserted_len = va_arg(ap, size_t);
 		vis_lua_text_changed(vis, txt, pos, deleted, inserted, inserted_len);
 	} break;
+	case VIS_EVENT_KEYS_PENDING:
+		vis_lua_keys_pending(vis, va_arg(ap, const char *));
+		break;
 	}
 
 	va_end(ap);

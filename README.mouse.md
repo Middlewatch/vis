@@ -86,6 +86,23 @@ unknown and the file should be reread. Do not modify the file from the
 handler. The hook lives in `text.c` (`text_on_change`), so every path
 that edits a `Text` reports, including sam commands and Lua `file:insert`.
 
+## Pending keys event
+
+`vis.events.KEYS_PENDING` reports a half-typed key sequence:
+
+    keys_pending(prefix)
+
+It fires with the typed keys when they are a prefix of at least one
+binding in the current mode but no complete one, so the editor is
+waiting for more input, and once with `nil` when that prefix resolves to
+a binding or is abandoned. Keys a binding itself waits for (the character
+after `f`, the register after `"`) are not reported. The check runs at
+the end of `vis_keys_process` in `vis.c`, which already knows whether
+what remains in the input queue is ambiguous, so the event costs one flag
+on `Vis`. It is the hook for a which-key style hint menu: on a prefix,
+draw the bindings under it from `vis:mappings` in the overlay; on `nil`,
+hide it.
+
 Nothing is reported until something enables mouse tracking in the
 terminal. `lua/vis-mouse.lua` does that on `START` (`\e[?1003h` for all
 motion, `\e[?1006h` for SGR encoding) and turns it off on `QUIT`.

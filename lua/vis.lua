@@ -157,6 +157,7 @@ local events = {
 	TERM_CSI = "Event::TERM_CSI", -- see @{term_csi}
 	MOUSE = "Event::MOUSE", -- see @{mouse}
 	TEXT_CHANGED = "Event::TEXT_CHANGED", -- see @{text_changed}
+	KEYS_PENDING = "Event::KEYS_PENDING", -- see @{keys_pending}
 	PROCESS_RESPONSE = "Event::PROCESS_RESPONSE", -- see @{process_response}
 	UI_DRAW = "Event::UI_DRAW", -- see @{ui_draw}
 }
@@ -176,6 +177,7 @@ events.win_status = function(...) events.emit(events.WIN_STATUS, ...) end
 events.term_csi = function(...) events.emit(events.TERM_CSI, ...) end
 events.mouse = function(...) events.emit(events.MOUSE, ...) end
 events.text_changed = function(...) events.emit(events.TEXT_CHANGED, ...) end
+events.keys_pending = function(...) events.emit(events.KEYS_PENDING, ...) end
 events.process_response = function(...) events.emit(events.PROCESS_RESPONSE, ...) end
 events.ui_draw = function(...) events.emit(events.UI_DRAW, ...) end
 

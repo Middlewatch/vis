@@ -1083,6 +1083,17 @@ static bool isprefix(const char *key, void *value, void *data) {
 	return completion->count == 1;
 }
 
+/* report a partially typed key sequence (prefix of at least one binding but
+ * no complete one), or its resolution once prefix is NULL or empty */
+static void vis_keys_pending(Vis *vis, const char *prefix)
+{
+	bool pending = prefix && *prefix;
+	if (!pending && !vis->keys_pending)
+		return;
+	vis->keys_pending = pending;
+	vis_event_emit(vis, VIS_EVENT_KEYS_PENDING, pending ? prefix : NULL);
+}
+
 VIS_INTERNAL void
 vis_keys_process(Vis *vis, s64 pos)
 {
@@ -1098,6 +1109,7 @@ vis_keys_process(Vis *vis, s64 pos)
 			buffer_remove(buf, keys - buf->data, strlen(keys));
 			// TODO(rnp): hack: see above
 			vis_buffer_terminate(buf);
+			vis_keys_pending(vis, NULL);
 			return;
 		}
 
@@ -1194,6 +1206,8 @@ vis_keys_process(Vis *vis, s64 pos)
 
 	buffer_remove(buf, keys - buf->data, end - keys);
 	vis_buffer_terminate(buf);
+	/* an ambiguous prefix is all that remains after the removal */
+	vis_keys_pending(vis, prefix ? (char *)buffer_content0(buf) + pos : NULL);
 }
 
 VIS_INTERNAL void

@@ -210,6 +210,7 @@ struct Vis {
 	char key_current[VIS_KEY_LENGTH_MAX];/* current key being processed by the input queue */
 	char key_prev[VIS_KEY_LENGTH_MAX];   /* previous key which was processed by the input queue */
 	Buffer input_queue;                  /* holds pending input keys */
+	bool keys_pending;                   /* whether a KEYS_PENDING prefix was reported and not yet cleared */
 	bool errorhandler;                   /* whether we are currently in an error handler, used to avoid recursion */
 	Action action;                       /* current action which is in progress */
 	Action action_prev;                  /* last operator action used by the repeat (dot) command */
@@ -279,6 +280,7 @@ enum VisEvents {
 	VIS_EVENT_UI_DRAW,
 	VIS_EVENT_MOUSE, /* see README.mouse.md */
 	VIS_EVENT_TEXT_CHANGED, /* see text_on_change() */
+	VIS_EVENT_KEYS_PENDING, /* see vis_keys_pending() */
 };
 
 VIS_INTERNAL bool vis_event_emit(Vis*, enum VisEvents, ...);
