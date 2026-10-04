@@ -260,6 +260,20 @@ which termkey treated as an X10 prefix and truncated every report. That
 entry is now skipped so the CSI parser handles SGR reports. This was the
 xterm and urxvt breakage reported against the original patch.
 
+## Building
+
+`bin/install [PREFIX]` runs `./configure --prefix`, `make` and
+`make install`; the default prefix is `~/.local`, so the binary lands
+in `~/.local/bin/vis` and the Lua runtime in `~/.local/share/vis`. It
+needs a C compiler, make, Lua 5.x and ncursesw headers, and LPeg for
+that Lua at run time; on Fedora
+`sudo dnf install gcc make lua-devel ncurses-devel lua-lpeg`. User
+config in `~/.config/vis` is searched before the share directory. To
+run the tree without installing, `./vis` works after `make`, but the
+`lua/` beside the binary is searched first, so point `VIS_PATH` at
+the config directory to keep its `visrc.lua` from being shadowed by
+the sample one.
+
 ## Using it
 
 Add to `visrc.lua`:

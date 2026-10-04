@@ -1,0 +1,23 @@
+#!/bin/sh
+# Build the vis fork and install it under a prefix, default ~/.local:
+# the binary in PREFIX/bin, the Lua runtime in PREFIX/share/vis, man
+# pages in PREFIX/share/man. Re-running rebuilds and reinstalls.
+#
+# usage: bin/install [PREFIX]
+#
+# Needs a C compiler, make, Lua 5.x and ncursesw headers, and LPeg for
+# that Lua at run time. On Fedora:
+#   sudo dnf install gcc make lua-devel ncurses-devel lua-lpeg
+# SELinux, TRE and ACL support are enabled when their headers are found.
+# User config stays in ~/.config/vis, searched before PREFIX/share/vis.
+set -eu
+cd "$(dirname "$0")/.."
+PREFIX=${1:-$HOME/.local}
+for tool in cc make; do
+	command -v "$tool" >/dev/null 2>&1 || { echo "bin/install: missing $tool" >&2; exit 1; }
+done
+./configure --prefix="$PREFIX"
+make
+make install
+printf 'installed: '
+"$PREFIX/bin/vis" -v
