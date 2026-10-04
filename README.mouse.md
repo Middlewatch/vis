@@ -144,6 +144,33 @@ no delay: vis has no timer, so the box appears on the first key. Terminal
 size comes from `vis.ui.width` and `vis.ui.height`, a one-line addition
 in `vis-lua.c` that the box needs to anchor itself to the bottom.
 
+## LSP
+
+The fork carries no LSP code. It uses vis-lspc
+(<https://codeberg.org/muhq/vis-lspc>, GPL-3.0; the GitHub repository is
+abandoned), cloned into `~/.config/vis/plugins/vis-lspc` and loaded with
+`lspc = require('plugins/vis-lspc')`. The vet before adopting it: one
+maintainer with occasional contributors, commits every month or two
+through 2026-10, releases tagged, the LICENSE file is GPL-3 verbatim
+with a public-domain `json.lua`, and it needs only `vis:communicate`,
+which upstream has had since 0.9. The bus factor is the noted risk.
+
+The clone's `incremental-sync` branch holds one patch: when
+`vis.events.TEXT_CHANGED` exists and the server asked for incremental
+synchronization, each change goes out as one ranged `didChange` and the
+whole-file resend before every request is skipped; an undo marks the
+file stale and the next request sends it whole. Servers that want full
+synchronization and a vis without the event behave as before. The
+patch stays local: vis-lspc's README forbids contributions created or
+modified with an LLM, and this one was.
+
+Servers come from `PATH`. lspc preconfigures zls, lua-language-server,
+clangd, gopls and bash-language-server; `~/.config/vis/visrc.lua` adds
+pyright and marksman. One quirk of running the fork from its build
+directory: `vis_lua_path_add` prepends, so the binary-relative `lua/`
+outranks `~/.config/vis` and upstream's sample `lua/visrc.lua` shadows
+the user's. `VIS_PATH=~/.config/vis` outranks both.
+
 Nothing is reported until something enables mouse tracking in the
 terminal. `lua/vis-mouse.lua` does that on `START` (`\e[?1003h` for all
 motion, `\e[?1006h` for SGR encoding) and turns it off on `QUIT`.

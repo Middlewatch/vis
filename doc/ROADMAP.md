@@ -121,6 +121,7 @@ hit test as `vis:win_at`, P2 overlay as `vis:overlay_show` and
 `vis:overlay_hide`, P3 status segments as the table form of
 `win:status`, P4 as `vis.events.TEXT_CHANGED`, P5 as
 `vis.events.KEYS_PENDING`, F3 as `lua/vis-modeline.lua`, F4 as
-`lua/vis-hints.lua` with `vis.ui.width` and `vis.ui.height` added for it
-(see `README.mouse.md`). The lspc incremental `didChange` patch waits for F1.
-Everything else is open.
+`lua/vis-hints.lua` with `vis.ui.width` and `vis.ui.height` added for it,
+F1 as vis-lspc in `~/.config/vis/plugins` with the incremental
+`didChange` patch on its `incremental-sync` branch (see
+`README.mouse.md`). Everything else is open.
