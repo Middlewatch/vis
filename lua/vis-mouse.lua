@@ -64,10 +64,17 @@ mouse.options = { mouse = true }
 
 -- resolve the terminal cell under the mouse: window, file position (nil on
 -- the status bar) and which part of the window was hit ("text", "sidebar"
--- or "status")
+-- or "status"). On the overlay the window and position are nil, the part
+-- is "overlay" and the 1-based overlay row follows as a fourth value.
 function mouse.resolve(m)
-	return vis:win_at(m.line, m.col)
+	local win, pos, where = vis:win_at(m.line, m.col)
+	if where == "overlay" then return nil, nil, where, pos end
+	return win, pos, where
 end
+
+-- called with the 1-based overlay row and the mouse state when a single
+-- click lands on the overlay; whoever shows the overlay sets this
+mouse.overlay_click = nil
 
 -- like mouse.resolve, but also focus the window under the mouse
 local function focus_resolve(m)
@@ -205,7 +212,11 @@ function mouse.single_click(state)
 		return
 	end
 
-	local _, gpos = focus_resolve(state.current)
+	local _, gpos, where, row = focus_resolve(state.current)
+	if where == "overlay" then
+		if mouse.overlay_click then mouse.overlay_click(row, state.current) end
+		return
+	end
 	if not gpos then return end
 	local currange = vis.win.selection.range
 
