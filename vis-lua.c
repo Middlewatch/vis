@@ -1882,12 +1882,29 @@ static const struct luaL_Reg vis_option_funcs[] = {
  * Default style IDs
  * @tfield table style_ids ids for all default styles.
  */
+/***
+ * Terminal width in cells.
+ * @tfield int width
+ */
+/***
+ * Terminal height in cells, including the status and info lines.
+ * @tfield int height
+ */
 
 VIS_INTERNAL int
 vis_lua_ui_index(lua_State *L)
 {
 	Vis *vis = lua_touserdata(L, lua_upvalueindex(1));
 	if (lua_isstring(L, 2)) {
+		const char *key = lua_tostring(L, 2);
+		if (strcmp(key, "width") == 0) {
+			lua_pushinteger(L, vis->ui.width);
+			return 1;
+		}
+		if (strcmp(key, "height") == 0) {
+			lua_pushinteger(L, vis->ui.height);
+			return 1;
+		}
 		VisOption *option = vis_option_from_string(vis, vis_lua_to_str8(L, 2));
 		// TODO(rnp): better filtering
 		if (option == vis_options_table + OPTION_LAYOUT)
