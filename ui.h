@@ -220,6 +220,10 @@ VIS_INTERNAL bool vis_ui_window_style_set_pos(Win *win, int x, int y, u16 style_
 
 VIS_INTERNAL void ui_window_options_set(Win *win, enum UiOption options);
 VIS_INTERNAL void ui_window_status(Vis *vis, Win *win, const char *status);
+/* paint width cells of the status line from column x: text, then blanks, in
+ * style_id merged over the status style (any invalid id means the status
+ * style alone) */
+VIS_INTERNAL void ui_window_status_segment(Vis *vis, Win *win, int x, int width, str8 text, int style_id);
 
 // NOTE: returns a cell representing the first character in string. if
 // successful string is modified to skip data taken by cell. to check if

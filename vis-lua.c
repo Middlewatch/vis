@@ -2277,17 +2277,90 @@ vis_lua_window_style_pos(lua_State *L)
 	return 1;
 }
 
+/* a status part is a string or a list of segments, each a string or a
+ * {text, style_id} table; strings take the status style */
+static int status_segment_get(lua_State *L, int idx, size_t i, const char **text, size_t *len) {
+	int style_id = -1;
+	lua_rawgeti(L, idx, i);
+	if (lua_istable(L, -1)) {
+		lua_rawgeti(L, -1, 2);
+		style_id = luaL_optinteger(L, -1, -1);
+		lua_pop(L, 1);
+		lua_rawgeti(L, -1, 1);
+		lua_remove(L, -2);
+	}
+	*text = lua_tolstring(L, -1, len);
+	if (!*text) {
+		*text = "";
+		*len = 0;
+	}
+	return style_id;
+}
+
+static int status_part_width(lua_State *L, int idx) {
+	size_t len;
+	const char *text;
+	if (!lua_istable(L, idx)) {
+		text = luaL_optlstring(L, idx, "", &len);
+		return text_string_width(text, len);
+	}
+	int width = 0;
+	size_t count = lua_rawlen(L, idx);
+	for (size_t i = 1; i <= count; i++) {
+		status_segment_get(L, idx, i, &text, &len);
+		width += text_string_width(text, len);
+		lua_pop(L, 1);
+	}
+	return width;
+}
+
+static int status_part_draw(lua_State *L, Win *win, int idx, int x) {
+	size_t len;
+	const char *text;
+	if (!lua_istable(L, idx)) {
+		text = luaL_optlstring(L, idx, "", &len);
+		int width = text_string_width(text, len);
+		ui_window_status_segment(win->vis, win, x, width, (str8){.data = (u8 *)text, .length = len}, -1);
+		return x + width;
+	}
+	size_t count = lua_rawlen(L, idx);
+	for (size_t i = 1; i <= count; i++) {
+		int style_id = status_segment_get(L, idx, i, &text, &len);
+		int width = text_string_width(text, len);
+		ui_window_status_segment(win->vis, win, x, width, (str8){.data = (u8 *)text, .length = len}, style_id);
+		lua_pop(L, 1);
+		x += width;
+	}
+	return x;
+}
+
 /***
  * Set window status line.
  *
+ * Either part is a string, or a list of segments where each segment is a
+ * string or a `{text, style_id}` table. Plain text takes the status style;
+ * a segment style is merged over it, so a style setting only `fore` keeps
+ * the status background. With the default theme's `reverse` status set
+ * both `fore` and `back`.
+ *
  * @function status
- * @tparam string left the left aligned part of the status line
- * @tparam[opt] string right the right aligned part of the status line
+ * @tparam string|table left the left aligned part of the status line
+ * @tparam[opt] string|table right the right aligned part of the status line
+ * @see style_define
+ * @usage
+ * win:status({ {" NORMAL ", mode_style}, " " .. win.file.name }, { {"12:3", pos_style} })
  */
 static int window_status(lua_State *L) {
 	Win *win = obj_ref_check(L, 1, VIS_LUA_TYPE_WINDOW);
 	char status[1024] = "";
 	int width = win->width;
+	if (lua_istable(L, 2) || lua_istable(L, 3)) {
+		int spaces = width - status_part_width(L, 2) - status_part_width(L, 3);
+		int x = status_part_draw(L, win, 2, 0);
+		ui_window_status_segment(win->vis, win, x, MAX(spaces, 1), str8(""), -1);
+		status_part_draw(L, win, 3, x + MAX(spaces, 1));
+		return 0;
+	}
 	const char *left = luaL_checkstring(L, 2);
 	const char *right = luaL_optstring(L, 3, "");
 	int left_width = text_string_width(left, strlen(left));

@@ -488,6 +488,34 @@ ui_window_status(Vis *vis, Win *win, const char *status)
 }
 
 VIS_INTERNAL void
+ui_window_status_segment(Vis *vis, Win *win, int x, int width, str8 text, int style_id)
+{
+	Ui *ui = &vis->ui;
+	int y = win->y + win->height - 1;
+	if (x < 0 || y < 0 || y >= ui->height)
+		return;
+	width = MIN(width, win->width - x);
+	width = MIN(width, ui->width - win->x - x);
+	if (width <= 0)
+		return;
+
+	VisUiStyle base_id = vis->win == win ? UI_STYLE_STATUS_FOCUSED : UI_STYLE_STATUS;
+	VisCellStyle style = vis_cell_style_merge(ui->styles[UI_STYLE_DEFAULT], ui->styles[base_id]);
+	if (Between(style_id, 0, ui->style_count - 1))
+		style = vis_cell_style_merge(style, ui->styles[style_id]);
+
+	x += win->x;
+	VisCellData   blank  = {.data = {' '}, .data_length = 1, .width = 1};
+	VisCellData  *cells  = ui->cell_buffer.cells  + y * ui->width + x;
+	VisCellStyle *styles = ui->cell_buffer.styles + y * ui->width + x;
+	for (int i = 0; i < width; i++) {
+		cells[i]  = blank;
+		styles[i] = style;
+	}
+	ui_draw_text(ui, x, y, width, text);
+}
+
+VIS_INTERNAL void
 ui_arrange(Vis *vis, enum UiLayout layout)
 {
 	Ui *tui = &vis->ui;
