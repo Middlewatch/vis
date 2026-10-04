@@ -318,7 +318,8 @@ VIS_EXPORT void vis_message_show(Vis *vis, const char *msg);
  * Show the overlay, a rectangle of styled text drawn over the windows on
  * every redraw, with its top left corner at the zero based terminal cell
  * (``x``, ``y``). There is one overlay; this clears its lines, add new ones
- * with vis_overlay_line(). It stays until vis_overlay_hide() is called.
+ * with vis_overlay_line() and vis_overlay_segment(). It stays until
+ * vis_overlay_hide() is called.
  * @param style_id The style of rows without a line.
  */
 VIS_EXPORT void vis_overlay_show(Vis*, int x, int y, int width, int height, int style_id);
@@ -327,6 +328,12 @@ VIS_EXPORT void vis_overlay_show(Vis*, int x, int y, int width, int height, int 
  * @param style_id The style of the row, or ``-1`` for the overlay's style.
  */
 VIS_EXPORT bool vis_overlay_line(Vis*, const char *text, size_t length, int style_id);
+/**
+ * Append text to the last line of the overlay, after what it holds.
+ * @param style_id A style merged over the row's, or ``-1`` for the row's alone.
+ * @return False if there is no line yet or the text could not be stored.
+ */
+VIS_EXPORT bool vis_overlay_segment(Vis*, const char *text, size_t length, int style_id);
 /** Hide the overlay. */
 VIS_EXPORT void vis_overlay_hide(Vis*);
 /**

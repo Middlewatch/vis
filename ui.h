@@ -126,14 +126,25 @@ typedef struct {
 } VisCellBuffer;
 
 typedef struct {
-	s32 offset;   /* start of the line text in UiOverlay::text */
+	s32 offset;   /* start of the segment text in UiOverlay::text */
 	s32 length;
+	u16 style_id; /* merged over the row's style, UI_STYLE_MAX for none */
+} UiOverlaySegment;
+
+typedef struct {
+	s32 first;    /* the row's segments in UiOverlay::segments */
+	s32 count;
 	u16 style_id;
 } UiOverlayLine;
 
 /* A rectangle of styled text drawn over the windows, see vis_overlay_show() */
 typedef struct {
-	Buffer text;               /* text of all lines, back to back */
+	Buffer text;               /* text of all segments, back to back */
+	struct {
+		UiOverlaySegment *data;
+		VisDACount        count;
+		VisDACount        capacity;
+	} segments;
 	struct {
 		UiOverlayLine *data;
 		VisDACount     count;

@@ -767,15 +767,17 @@ static int message(lua_State *L) {
  * @tparam table overlay
  * @tparam int overlay.x 0-based terminal column of the top left corner
  * @tparam int overlay.y 0-based terminal row of the top left corner
- * @tparam {string,...} overlay.lines one string per row, cut at the right edge
+ * @tparam {string|table,...} overlay.lines one entry per row, cut at the right edge: a string, or a list of segments as taken by @{Window:status}, each a string or a `{text, style_id}` table whose style is merged over the row's
  * @tparam[opt] int overlay.width the width in cells, defaults to the widest line
  * @tparam[opt] int overlay.height the height in rows, defaults to the number of lines
  * @tparam[opt] int overlay.style style id of the rectangle, defaults to `ui.style_ids.STATUS`
  * @tparam[opt] {int,...} overlay.styles per row style ids overriding `style`
  * @see style_define
  * @usage
- * vis:overlay_show{x = 4, y = 2, lines = {"first", "second"}}
+ * vis:overlay_show{x = 4, y = 2, lines = {"first", {"sec", {"ond", id}}}}
  */
+static int status_segment_get(lua_State *L, int idx, size_t i, const char **text, size_t *len);
+static int status_part_width(lua_State *L, int idx);
 static int overlay_show(lua_State *L) {
 	Vis *vis = obj_ref_check(L, 1, "vis");
 	luaL_checktype(L, 2, LUA_TTABLE);
@@ -798,11 +800,8 @@ static int overlay_show(lua_State *L) {
 	if (width < 0) {
 		width = 0;
 		for (size_t i = 1; i <= count; i++) {
-			size_t len;
 			lua_rawgeti(L, 3, i);
-			const char *line = lua_tolstring(L, -1, &len);
-			if (line)
-				width = MAX(width, text_string_width(line, len));
+			width = MAX(width, status_part_width(L, lua_gettop(L)));
 			lua_pop(L, 1);
 		}
 	}
@@ -811,16 +810,29 @@ static int overlay_show(lua_State *L) {
 
 	vis_overlay_show(vis, x, y, width, height, style);
 	for (size_t i = 1; i <= count; i++) {
-		size_t len = 0;
-		lua_rawgeti(L, 3, i);
-		const char *line = lua_tolstring(L, -1, &len);
 		int line_style = -1;
 		if (styles) {
 			lua_rawgeti(L, 4, i);
 			line_style = luaL_optinteger(L, -1, -1);
 			lua_pop(L, 1);
 		}
-		vis_overlay_line(vis, line ? line : "", len, line_style);
+		lua_rawgeti(L, 3, i);
+		if (lua_istable(L, -1)) {
+			int idx = lua_gettop(L);
+			size_t segments = lua_rawlen(L, idx);
+			vis_overlay_line(vis, "", 0, line_style);
+			for (size_t j = 1; j <= segments; j++) {
+				size_t len;
+				const char *text;
+				int style_id = status_segment_get(L, idx, j, &text, &len);
+				vis_overlay_segment(vis, text, len, style_id);
+				lua_pop(L, 1);
+			}
+		} else {
+			size_t len = 0;
+			const char *line = lua_tolstring(L, -1, &len);
+			vis_overlay_line(vis, line ? line : "", len, line_style);
+		}
 		lua_pop(L, 1);
 	}
 	return 0;

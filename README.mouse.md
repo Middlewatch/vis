@@ -46,8 +46,11 @@ rectangle of styled text painted over the windows after every redraw:
 `x` and `y` are 0-based terminal cells like `win:style_pos`. `width`
 defaults to the widest line and `height` to the number of lines; rows
 without a line are filled in `style` (default `ui.style_ids.STATUS`),
-and `styles` overrides the style per row. Lines are cut at the right
-edge; wide characters are handled and control characters shown as `^X`.
+and `styles` overrides the style per row. A line may also be a list of
+segments in the `win:status` shape, `{"key", {" help", id}}`, each
+segment's style merged over the row's, so one row can carry several
+colors. Lines are cut at the right edge; wide characters are handled and
+control characters shown as `^X`.
 The overlay is not tied to a window and stays until hidden, so the
 feature that showed it decides when it goes. The cursor stays in the
 focused window. `vis:win_at` reports a cell on the overlay as

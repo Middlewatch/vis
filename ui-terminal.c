@@ -328,11 +328,11 @@ ui_draw_string(Ui *tui, int x, int y, const char *str, uint16_t style_id)
 /* NOTE: draws text into at most width cells of row y starting at column x.
  * Handles wide characters and shows control characters as ^X. The cells
  * keep their current style */
-VIS_INTERNAL void
+VIS_INTERNAL int
 ui_draw_text(Ui *tui, int x, int y, int width, str8 text)
 {
 	if (x < 0 || y < 0 || y >= tui->height)
-		return;
+		return 0;
 	width = MIN(width, tui->width - x);
 
 	VisCellData *cells = tui->cell_buffer.cells + y * tui->width + x;
@@ -361,6 +361,7 @@ ui_draw_text(Ui *tui, int x, int y, int width, str8 text)
 
 		column += cell.width;
 	}
+	return MIN(column, width);
 }
 
 VIS_INTERNAL void
@@ -387,9 +388,21 @@ ui_overlay_draw(Ui *tui)
 			styles[x] = style;
 		}
 
-		if (line) {
-			str8 text = {.data = (u8 *)overlay->text.data + line->offset, .length = line->length};
-			ui_draw_text(tui, overlay->x, y, overlay->width, text);
+		if (!line)
+			continue;
+
+		/* segments follow each other on the row, each merging its style over the row's */
+		int x = overlay->x;
+		for (s32 i = 0; i < line->count && x < x_end; i++) {
+			UiOverlaySegment *segment = overlay->segments.data + line->first + i;
+			str8 text = {.data = (u8 *)overlay->text.data + segment->offset, .length = segment->length};
+			int width = ui_draw_text(tui, x, y, x_end - x, text);
+			if (segment->style_id != UI_STYLE_MAX) {
+				VisCellStyle merged = vis_cell_style_merge(style, tui->styles[segment->style_id]);
+				for (int c = x; c < x + width; c++)
+					styles[c] = merged;
+			}
+			x += width;
 		}
 	}
 }

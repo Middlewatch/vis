@@ -364,22 +364,37 @@ vis_overlay_show(Vis *vis, int x, int y, int width, int height, int style_id)
 	overlay->width       = MAX(width, 0);
 	overlay->height      = MAX(height, 0);
 	overlay->style_id    = Between(style_id, 0, vis->ui.style_count - 1) ? style_id : UI_STYLE_DEFAULT;
-	overlay->lines.count = 0;
-	overlay->text.length = 0;
-	overlay->visible     = true;
+	overlay->lines.count    = 0;
+	overlay->segments.count = 0;
+	overlay->text.length    = 0;
+	overlay->visible        = true;
 }
 
 bool
 vis_overlay_line(Vis *vis, const char *text, size_t length, int style_id)
 {
 	UiOverlay *overlay = &vis->ui.overlay;
+	UiOverlayLine *line = da_push(vis, &overlay->lines);
+	line->first    = overlay->segments.count;
+	line->count    = 0;
+	line->style_id = Between(style_id, 0, vis->ui.style_count - 1) ? style_id : overlay->style_id;
+	return length == 0 || vis_overlay_segment(vis, text, length, -1);
+}
+
+bool
+vis_overlay_segment(Vis *vis, const char *text, size_t length, int style_id)
+{
+	UiOverlay *overlay = &vis->ui.overlay;
+	if (!overlay->lines.count)
+		return false;
 	s32 offset = overlay->text.length;
 	if (!buffer_append(&overlay->text, text, length))
 		return false;
-	UiOverlayLine *line = da_push(vis, &overlay->lines);
-	line->offset   = offset;
-	line->length   = length;
-	line->style_id = Between(style_id, 0, vis->ui.style_count - 1) ? style_id : overlay->style_id;
+	UiOverlaySegment *segment = da_push(vis, &overlay->segments);
+	segment->offset   = offset;
+	segment->length   = length;
+	segment->style_id = Between(style_id, 0, vis->ui.style_count - 1) ? style_id : UI_STYLE_MAX;
+	overlay->lines.data[overlay->lines.count - 1].count++;
 	return true;
 }
 
