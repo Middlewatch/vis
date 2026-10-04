@@ -136,16 +136,41 @@ lualine-style bar from status segments:
 
     modeline = require('vis-modeline')
 
-Left: mode block (focused window only), git branch, file name, modified
-flag, LSP diagnostic counts. Right: pending keys or count, selection
-index, LSP server name, syntax, percentage, line and column. The branch
+Sections follow lualine. Left: a is the mode block (focused window
+only), b the git branch and LSP diagnostic counts, c the file name with
+its modified flag. Right: x holds pending keys or count, selection index,
+LSP server name and syntax; y the percentage; z line and column. The branch
 comes from `.git/HEAD` (worktrees followed), cached per directory and
 re-read every `modeline.git_refresh` seconds, so no subprocess runs. LSP
 state is read from vis-lspc's `open_files` table when that module is
-loaded; without it those segments are simply absent. `modeline.colors`
-holds the style strings and `modeline.symbols` the glyphs; set them in
+loaded; without it those segments are simply absent.
+
+`modeline.colors` holds the style strings: one `{ a, b }` pair per mode
+(z and y reuse them) and a `fore` per diagnostic kind, laid over the b
+section's background. c, x and the bar itself take the theme's
+`STYLE_STATUS_FOCUSED` (`STYLE_STATUS` for unfocused windows), so a
+solid bar comes from redefining those two styles. `modeline.separators`
+holds the powerline glyphs between sections (`left`, `right`) and
+between items of one section (`item_left`, `item_right`); a section
+separator needs a `back` on the section it leaves and falls back to a
+space. `modeline.symbols` holds the other glyphs. Set all of these in
 `visrc.lua` before the first redraw. `modeline.enabled = false` returns
 the bar to the default handler.
+
+A modus-vivendi-tinted setup matching lualine's modus theme:
+
+    modeline.colors.normal  = { a = "fore:#1d2235,back:#82b0ec,bold", b = "fore:#82b0ec,back:#393f51,bold" }
+    modeline.colors.insert  = { a = "fore:#1d2235,back:#88ca9f,bold", b = "fore:#88ca9f,back:#393f51,bold" }
+    modeline.colors.visual  = { a = "fore:#1d2235,back:#caa6df,bold", b = "fore:#caa6df,back:#393f51,bold" }
+    modeline.colors.replace = { a = "fore:#1d2235,back:#ff9f80,bold", b = "fore:#ff9f80,back:#393f51,bold" }
+    vis.events.subscribe(vis.events.INIT, function()
+    	local ui = vis.ui
+    	ui:style_define(ui.style_ids.STATUS_FOCUSED, "fore:#f0f0f0,back:#393f51")
+    	ui:style_define(ui.style_ids.STATUS, "fore:#969696,back:#292d48")
+    end)
+
+The INIT handler runs after vis-std's, which applies the theme, so the
+redefinition survives it.
 
 ## Leader hints
 

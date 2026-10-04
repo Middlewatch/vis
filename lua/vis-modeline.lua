@@ -2,31 +2,43 @@
 --
 --   modeline = require('vis-modeline')
 --
--- Left: mode block, git branch, file name with modified flag, LSP
--- diagnostic counts. Right: pending keys or count, selection index, LSP
--- server name, syntax, percentage, line:col. Only the focused window
--- shows the mode block. Colors come from `modeline.colors`, read when a
--- style is first used, so set them in visrc before the first redraw.
--- `modeline.enabled = false` hands the status line back to the default.
+-- Sections follow lualine: a is the mode block, b the git branch and
+-- LSP diagnostic counts, c the file name with its modified flag. The
+-- right side mirrors them: x holds pending keys or count, selection
+-- index, LSP server and syntax; y the percentage; z line:col. Only the
+-- focused window shows a and z. Colors come from `modeline.colors`, read
+-- when a style is first used, so set them in visrc before the first
+-- redraw. `modeline.enabled = false` hands the status line back to the
+-- default.
 require('vis')
 
 local modeline = {}
 modeline.enabled = true
 
--- Style strings. Attributes replace the status style's, so a colored
--- segment sets both `fore` and `back`; plain text keeps the status style.
+-- Style strings. A segment style is merged over the status style, so a
+-- `fore`-only string keeps the bar's background. Each mode names the
+-- style of its a block and of the b section; c, x and the bar itself are
+-- the theme's STATUS_FOCUSED style (STATUS for unfocused windows).
 modeline.colors = {
-	normal   = "fore:black,back:blue,bold",
-	insert   = "fore:black,back:green,bold",
-	visual   = "fore:black,back:magenta,bold",
-	replace  = "fore:black,back:red,bold",
-	modified = "fore:black,back:yellow",
-	branch   = "fore:black,back:cyan",
-	error    = "fore:black,back:red",
-	warn     = "fore:black,back:yellow",
-	info     = "fore:black,back:cyan",
-	hint     = "fore:black,back:blue",
-	lsp      = "fore:black,back:green",
+	normal   = { a = "fore:black,back:blue,bold",    b = "fore:blue,bold"    },
+	insert   = { a = "fore:black,back:green,bold",   b = "fore:green,bold"   },
+	visual   = { a = "fore:black,back:magenta,bold", b = "fore:magenta,bold" },
+	replace  = { a = "fore:black,back:red,bold",     b = "fore:red,bold"     },
+	modified = "fore:yellow",
+	error    = "fore:red",
+	warn     = "fore:yellow",
+	info     = "fore:cyan",
+	hint     = "fore:blue",
+	lsp      = "fore:green",
+}
+
+-- Powerline glyphs between sections and between items of one section.
+-- A section separator takes the near section's background as its
+-- foreground, so it draws only when that section sets `back`; otherwise
+-- it falls back to a space. Set any entry to nil for a plain space.
+modeline.separators = {
+	left  = "\u{e0b0}", right = "\u{e0b2}",  -- between sections
+	item_left = "\u{e0b1}", item_right = "\u{e0b3}",  -- within a section
 }
 
 -- Nerd-font glyphs are plain UTF-8; replace with ASCII if the font lacks them.
@@ -56,14 +68,27 @@ local modes = {
 	[vis.modes.REPLACE]          = { "REPLACE", "replace" },
 }
 
+-- style ids are allocated once per distinct style string
 local styles = {}
-local function style(name)
-	local id = styles[name]
+local function style(spec)
+	local id = styles[spec]
 	if not id then
-		id = vis.ui:style_push(modeline.colors[name] or "")
-		styles[name] = id
+		id = vis.ui:style_push(spec)
+		styles[spec] = id
 	end
 	return id
+end
+
+local function back(spec)
+	return spec and spec:match("back:%s*([^,%s]+)")
+end
+
+-- an item's own colors laid over its section's background
+local function on(section, spec)
+	spec = spec or ""
+	local bg = back(section)
+	if bg and not back(spec) then spec = spec .. ",back:" .. bg end
+	return spec
 end
 
 -- git branch, read from .git/HEAD and cached per directory
@@ -154,58 +179,99 @@ end
 
 -- the status handler
 
-local function pad(text) return " " .. text .. " " end
+-- A section is { style = spec or nil, items = { text | {text, spec} } }.
+-- Rendering pads each item, joins items with the item separator, and
+-- puts a section separator between adjacent non-empty sections. The
+-- right side is built in reading order (x, y, z) and the glyphs point
+-- the other way.
+
+local function render(sections, sep, item_sep, rightward)
+	local out, prev = {}, nil
+	for _, section in ipairs(sections) do
+		if #section.items > 0 then
+			if prev then
+				-- the near section is the one the glyph's point leaves
+				local near, far = prev.style, section.style
+				if rightward then near, far = far, near end
+				local bg = back(near)
+				if sep and bg then
+					local fbg = back(far)
+					table.insert(out, { sep, style("fore:" .. bg .. (fbg and (",back:" .. fbg) or "")) })
+				else
+					table.insert(out, section.style and { " ", style(section.style) } or " ")
+				end
+			end
+			for i, item in ipairs(section.items) do
+				local text, spec = item, section.style
+				if type(item) == "table" then
+					text, spec = item[1], on(section.style or "", item[2])
+				end
+				if i > 1 then
+					local glyph = item_sep or ""
+					table.insert(out, section.style and { glyph, style(section.style) } or glyph)
+				end
+				text = " " .. text .. " "
+				table.insert(out, spec and spec ~= "" and { text, style(spec) } or text)
+			end
+			prev = section
+		end
+	end
+	return out
+end
 
 local function status(win)
 	if not modeline.enabled then return end
 	local file, sel = win.file, win.selection
-	local sym = modeline.symbols
-	local left, right = {}, {}
+	local sym, colors, sep = modeline.symbols, modeline.colors, modeline.separators
 	local mode = vis.win == win and modes[vis.mode]
-	if mode then table.insert(left, { pad(mode[1]), style(mode[2]) }) end
+	local mc = mode and colors[mode[2]] or {}
+
+	local a, b, c = { style = mc.a, items = {} }, { style = mc.b, items = {} }, { items = {} }
+	local x, y, z = { items = {} }, { style = mc.b, items = {} }, { style = mc.a, items = {} }
+
+	if mode then table.insert(a.items, mode[1]) end
 
 	local path = file.path and parent(file.path) or os.getenv("PWD")
 	local branch = path and git_branch(path)
-	if branch then table.insert(left, { pad(sym.branch .. branch), style("branch") }) end
-
-	table.insert(left, pad(file.name or "[No Name]"))
-	if file.modified then table.insert(left, { sym.modified, style("modified") }) end
-	if vis.recording then table.insert(left, " @") end
+	if branch then table.insert(b.items, sym.branch .. branch) end
 
 	local servers, counts = lsp_state(file)
 	if counts then
 		for i, name in ipairs(severities) do
 			if counts[i] > 0 then
-				table.insert(left, { pad(sym[name] .. counts[i]), style(name) })
+				table.insert(b.items, { sym[name] .. counts[i], colors[name] })
 			end
 		end
 	end
 
+	local name = file.name or "[No Name]"
+	if vis.recording then name = name .. " @" end
+	table.insert(c.items, file.modified and { name .. sym.modified, colors.modified } or name)
+
 	local keys = vis.input_queue
 	if keys ~= "" then
-		table.insert(right, pad(keys))
+		table.insert(x.items, keys)
 	elseif vis.count then
-		table.insert(right, pad(vis.count))
+		table.insert(x.items, tostring(vis.count))
 	end
 	if #win.selections > 1 then
-		table.insert(right, pad(sel.number .. "/" .. #win.selections))
+		table.insert(x.items, sel.number .. "/" .. #win.selections)
 	end
 	if servers and servers ~= "" then
-		table.insert(right, { pad(sym.lsp .. servers), style("lsp") })
+		table.insert(x.items, { sym.lsp .. servers, colors.lsp })
 	end
-	if win.syntax then table.insert(right, pad(win.syntax)) end
+	if win.syntax then table.insert(x.items, win.syntax) end
 
 	local size, pos = file.size, sel.pos or 0
-	local percent = size == 0 and "0%" or math.ceil(pos / size * 100) .. "%"
-	table.insert(right, pad(percent))
+	table.insert(y.items, size == 0 and "0%" or math.ceil(pos / size * 100) .. "%")
 	if not win.large then
 		local col = sel.col
-		local where = pad(sel.line .. ":" .. col)
-		table.insert(right, mode and { where, style(mode[2]) } or where)
+		table.insert(z.items, sel.line .. ":" .. col)
 		if size > 33554432 or col > 65536 then win.large = true end
 	end
 
-	win:status(left, right)
+	win:status(render({ a, b, c }, sep.left, sep.item_left, false),
+	           render({ x, y, z }, sep.right, sep.item_right, true))
 	return true
 end
 
