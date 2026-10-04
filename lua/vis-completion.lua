@@ -7,12 +7,13 @@
 -- for the file, then words of the file itself. Typing on narrows it,
 -- <C-n> and <C-p> walk it (past either end nothing is chosen again),
 -- <Enter> inserts the chosen item and stays a line break while nothing
--- is chosen. A key that ends the word, or leaving INSERT, closes the
--- list; <C-n> on a closed list opens it by hand. A server trigger
+-- is chosen, and so does a click on a row. A key that ends the word, or
+-- leaving INSERT, closes the list; <C-n> on a closed list opens it by hand. A server trigger
 -- character such as "." opens it with the server's items alone. Knobs:
 -- `completion.keys`, `completion.colors`, `completion.max_rows`,
 -- `completion.min_chars`, `completion.buffer_words`, `completion.max_scan`.
 require('vis')
+local overlay = require('vis-overlay')
 
 local completion = {}
 completion.enabled = true
@@ -192,7 +193,7 @@ local state = {
 local function hide(drop)
 	if state.shown then
 		state.shown = false
-		vis:overlay_hide()
+		overlay.hide(completion)
 	end
 	if drop then
 		state.want, state.manual, state.trigger = false, false, nil
@@ -229,6 +230,16 @@ local function collect(win)
 		end
 	end
 	return out
+end
+
+local accept
+
+local function clicked(row, m)
+	if m.button ~= 1 or not state.shown then return end
+	local i = state.first + row - 1
+	if not state.candidates[i] then return end
+	state.selected = i
+	accept()
 end
 
 local function show(win)
@@ -270,7 +281,7 @@ local function show(win)
 	py = math.max(0, py)
 	local px = math.max(0, math.min(x, width - w))
 	state.shown = true
-	vis:overlay_show{ x = px, y = py, width = w, lines = lines, style = style("entry"), styles = stys }
+	overlay.show(completion, { x = px, y = py, width = w, lines = lines, style = style("entry"), styles = stys }, clicked)
 end
 
 -- runs on every redraw: follow the cursor, ask the server for a new word,
@@ -345,7 +356,7 @@ local function move(delta)
 	state.selected = i
 end
 
-local function accept()
+function accept()
 	local c = state.candidates[state.selected]
 	local win = state.win
 	local pos = win.selection.pos

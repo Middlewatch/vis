@@ -56,6 +56,18 @@ routes a single click there to `mouse.overlay_click(row, state)` instead
 of moving the cursor. Completion lists, hint menus, hover text, context
 menus and pickers are all meant to draw through it.
 
+Features share the one overlay through `lua/vis-overlay.lua`:
+
+    local overlay = require('vis-overlay')
+    overlay.show(me, {x = 0, y = 0, lines = {...}}, function(row, state) end)
+    overlay.hide(me)
+
+`show` makes the caller the owner and replaces whatever another owner
+drew (nothing is restored later); `hide` by anyone but the owner does
+nothing. The optional third argument receives clicks on the box, routed
+there by `vis-mouse`'s default `overlay_click`. Hints and completion go
+through it, and the completion list accepts the clicked row.
+
 The inverse of the hit test anchors a popup at a file position:
 
     local x, y = win:coord(pos)

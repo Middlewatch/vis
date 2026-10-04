@@ -10,6 +10,7 @@
 -- default); set it to nil for every prefix. Colors come from
 -- `hints.colors`, read when a style is first used.
 require('vis')
+local overlay = require('vis-overlay')
 
 local hints = {}
 hints.enabled = true
@@ -143,7 +144,7 @@ local shown = false
 local function hide()
 	if not shown then return end
 	shown = false
-	vis:overlay_hide()
+	overlay.hide(hints)
 end
 
 local function show(prefix)
@@ -184,11 +185,11 @@ local function show(prefix)
 	for r = 2, #lines do stys[r] = style("entry") end
 
 	shown = true
-	vis:overlay_show{
+	overlay.show(hints, {
 		x = 0, y = math.max(0, height - 1 - #lines),
 		width = width, lines = lines,
 		style = style("entry"), styles = stys,
-	}
+	})
 end
 
 local function triggered(prefix)

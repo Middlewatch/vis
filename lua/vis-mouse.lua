@@ -73,8 +73,9 @@ function mouse.resolve(m)
 end
 
 -- called with the 1-based overlay row and the mouse state when a click
--- (single or double) lands on the overlay; whoever shows the overlay sets this
-mouse.overlay_click = nil
+-- (single or double) lands on the overlay; by default vis-overlay routes
+-- it to the handler given by whoever showed the overlay
+mouse.overlay_click = require('vis-overlay').click
 
 -- like mouse.resolve, but also focus the window under the mouse
 local function focus_resolve(m)
