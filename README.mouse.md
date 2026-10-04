@@ -56,6 +56,15 @@ routes a single click there to `mouse.overlay_click(row, state)` instead
 of moving the cursor. Completion lists, hint menus, hover text, context
 menus and pickers are all meant to draw through it.
 
+The inverse of the hit test anchors a popup at a file position:
+
+    local x, y = win:coord(pos)
+
+returns the 0-based terminal cell showing `pos` in that window, or `nil`
+when it is off screen. The cell reflects the window's last redraw. The
+overlay is painted after the `UI_DRAW` event, so a handler there can
+place it against the layout of the frame being drawn.
+
 ## Status segments
 
 `win:status(left, right)` still takes two strings. Either part may also

@@ -577,7 +577,6 @@ ui_draw(Vis *vis)
 	ui_arrange(vis, vis->ui.layout);
 	for (Win *win = vis->windows; win; win = win->next)
 		ui_window_draw(win);
-	ui_overlay_draw(tui);
 
 	/* determine primary cursor's position */
 	if (vis->win) {
@@ -601,6 +600,8 @@ ui_draw(Vis *vis)
 	}
 
 	vis_event_emit(vis, VIS_EVENT_UI_DRAW);
+	/* last pass: the overlay covers everything, including what UI_DRAW styled */
+	ui_overlay_draw(tui);
 	ui_term_backend_blit(tui);
 }
 

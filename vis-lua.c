@@ -2402,6 +2402,34 @@ static int window_draw(lua_State *L) {
 }
 
 /***
+ * Find the terminal cell showing a file position.
+ *
+ * The inverse of @{Vis:win_at}: `x` and `y` are 0-based terminal cells as
+ * taken by @{Vis:overlay_show}, so a popup can be anchored at the cursor.
+ * They reflect the last redraw of the window; call @{draw} first after
+ * changing the text.
+ *
+ * @function coord
+ * @tparam int pos the file position
+ * @treturn int x the 0-based terminal column, or `nil` when the position is not on screen
+ * @treturn int y the 0-based terminal row
+ * @usage
+ * local x, y = win:coord(win.selection.pos)
+ */
+static int window_coord(lua_State *L) {
+	Win *win = obj_ref_check(L, 1, VIS_LUA_TYPE_WINDOW);
+	size_t pos = checkpos(L, 2);
+	int row, col;
+	if (!view_coord_get(&win->view, pos, NULL, &row, &col)) {
+		lua_pushnil(L);
+		return 1;
+	}
+	lua_pushinteger(L, win->x + win->sidebar_width + col);
+	lua_pushinteger(L, win->y + row);
+	return 2;
+}
+
+/***
  * Close window.
  *
  * After a successful call the Window reference becomes invalid and
@@ -2438,6 +2466,7 @@ static const struct luaL_Reg window_funcs[] = {
 	{ "style_pos", vis_lua_window_style_pos },
 	{ "status", window_status },
 	{ "draw", window_draw },
+	{ "coord", window_coord },
 	{ "close", window_close },
 	{ NULL, NULL },
 };
@@ -4062,6 +4091,8 @@ void vis_lua_process_response(Vis *vis, const char *name, char *buffer, size_t l
 /***
  * Emitted immediately before the UI is drawn to the screen.
  * Allows last-minute overrides to the styling of UI elements.
+ * The overlay is painted after this event, so a handler may place it
+ * with @{Vis:overlay_show} against the layout of this very redraw.
  *
  * *WARNING:* This is emitted every screen draw!
  * Use sparingly and check for `nil` values!
