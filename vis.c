@@ -334,6 +334,19 @@ vis_window_focus(Vis *vis, Win *new)
 	vis->win = new;
 }
 
+Win *
+vis_window_at(Vis *vis, int x, int y)
+{
+	for (Win *win = vis->windows; win; win = win->next) {
+		if (win->file->internal)
+			continue;
+		if (x >= win->x && x < win->x + win->width &&
+		    y >= win->y && y < win->y + win->height)
+			return win;
+	}
+	return NULL;
+}
+
 Win *window_new_file(Vis *vis, File *file, enum UiOption options) {
 	Win *win = calloc(1, sizeof(Win));
 	if (!win)

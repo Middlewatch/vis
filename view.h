@@ -105,6 +105,13 @@ VIS_INTERNAL void view_reload(View*, Text*);
 VIS_INTERNAL bool view_coord_get(View *view, size_t pos, Line **line, int *row, int *col);
 /** Get position at the start of the ``n``-th window line, counting from 1. */
 VIS_INTERNAL size_t view_screenline_goto(View*, int n);
+/**
+ * Get the file position displayed at a zero based window ``row`` and ``col``.
+ * Rows below the last used line map to that line, columns past the end of a
+ * line to its last cell, and columns inside a multi column character to its
+ * first cell.
+ */
+VIS_INTERNAL size_t view_pos_at(View*, int row, int col);
 VIS_INTERNAL size_t view_slide_up(View*, int lines);
 VIS_INTERNAL size_t view_slide_down(View*, int lines);
 VIS_INTERNAL size_t view_scroll_up(View*, int lines);

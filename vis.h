@@ -266,6 +266,12 @@ VIS_EXPORT void vis_window_prev(Vis*);
  */
 VIS_EXPORT void vis_window_focus(Vis*, Win*);
 /**
+ * Get the window covering the zero based terminal cell (``x``, ``y``).
+ * Internal windows such as the command prompt are skipped.
+ * @return The window or ``NULL``.
+ */
+VIS_EXPORT Win *vis_window_at(Vis*, int x, int y);
+/**
  * Swap location of two windows.
  * @param win1 The first window.
  * @param win2 The second window.

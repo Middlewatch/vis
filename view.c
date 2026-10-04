@@ -579,6 +579,26 @@ bool view_init(Win *win, Text *text) {
 	return true;
 }
 
+size_t view_pos_at(View *view, int row, int col) {
+	size_t pos = view->start;
+	Line *line = view->topline;
+	for (int r = 0; r < row && line && line != view->lastline; r++) {
+		pos += line->len;
+		line = line->next;
+	}
+	if (!line)
+		return view->end;
+	int max_col = MIN(view->width, line->width);
+	if (col >= max_col)
+		col = max_col - 1;
+	/* for characters which use more than 1 column, make sure we are on the left most */
+	while (col > 0 && line->cells[col].file_byte_count == 0)
+		col--;
+	for (int i = 0; i < col; i++)
+		pos += line->cells[i].file_byte_count;
+	return pos;
+}
+
 /* set/move current cursor position to a given (line, column) pair */
 static size_t cursor_set(Selection *sel, Line *line, int col)
 {

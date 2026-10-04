@@ -567,6 +567,41 @@ static int windows_iter(lua_State *L) {
 }
 
 /***
+ * Find the window and file position under a terminal cell.
+ *
+ * Coordinates are 1-based terminal rows and columns as reported by the
+ * @{MOUSE} event. A cell on the sidebar maps to the first text column of
+ * its row; a cell on the status bar yields a window but no position.
+ *
+ * @function win_at
+ * @tparam int line the terminal row
+ * @tparam int col the terminal column
+ * @treturn Window the window under the cell, or `nil`
+ * @treturn int the file position under the cell, or `nil`
+ * @treturn string which part of the window was hit: `"text"`, `"sidebar"` or `"status"`
+ */
+static int win_at(lua_State *L) {
+	Vis *vis = obj_ref_check(L, 1, "vis");
+	int y = luaL_checkinteger(L, 2) - 1;
+	int x = luaL_checkinteger(L, 3) - 1;
+	Win *win = vis_window_at(vis, x, y);
+	if (!win || !obj_ref_new(L, win, VIS_LUA_TYPE_WINDOW)) {
+		lua_pushnil(L);
+		return 1;
+	}
+	int row = y - win->y;
+	int col = x - win->x - win->sidebar_width;
+	if (row >= win->view.height) {
+		lua_pushnil(L);
+		lua_pushliteral(L, "status");
+		return 3;
+	}
+	lua_pushinteger(L, view_pos_at(&win->view, row, MAX(col, 0)));
+	lua_pushstring(L, col < 0 ? "sidebar" : "text");
+	return 3;
+}
+
+/***
  * Create an iterator over all files.
  * @function files
  * @return the new iterator
@@ -1663,6 +1698,7 @@ static int vis_newindex(lua_State *L) {
 static const struct luaL_Reg vis_lua[] = {
 	{ "files", files },
 	{ "windows", windows },
+	{ "win_at", win_at },
 	{ "mark_names", mark_names },
 	{ "register_names", register_names },
 	{ "command", command },
