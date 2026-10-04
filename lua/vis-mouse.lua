@@ -72,17 +72,17 @@ function mouse.resolve(m)
 	return win, pos, where
 end
 
--- called with the 1-based overlay row and the mouse state when a single
--- click lands on the overlay; whoever shows the overlay sets this
+-- called with the 1-based overlay row and the mouse state when a click
+-- (single or double) lands on the overlay; whoever shows the overlay sets this
 mouse.overlay_click = nil
 
 -- like mouse.resolve, but also focus the window under the mouse
 local function focus_resolve(m)
-	local win, pos, where = mouse.resolve(m)
+	local win, pos, where, row = mouse.resolve(m)
 	if win and win ~= vis.win then
 		vis.win = win
 	end
-	return win, pos, where
+	return win, pos, where, row
 end
 
 vis:option_register("mouse", "bool", function(value, toggle)
@@ -178,7 +178,11 @@ function mouse.double_click(state)
 	-- double clicking, by default, selects the WORD under the cursor
 	-- If the cursor is on column 1, start a line selection
 	-- same if the cursor is on a newline
-	local win, guessedpos, where = focus_resolve(state.current)
+	local win, guessedpos, where, row = focus_resolve(state.current)
+	if where == "overlay" then
+		if mouse.overlay_click then mouse.overlay_click(row, state.current) end
+		return
+	end
 	if not guessedpos then return end
 	local charatpos = win.file:content(guessedpos, 1)
 
