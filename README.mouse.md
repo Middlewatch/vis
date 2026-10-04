@@ -244,9 +244,10 @@ Add to `visrc.lua`:
 Defaults, in `lua/vis-mouse.lua`:
 
 - Wheel scrolls (`<C-y>` / `<C-e>`).
-- Click moves the cursor and focuses the window under the pointer; in
-  INSERT it also returns to NORMAL. The wheel scrolls the window under
-  the pointer, focusing it.
+- Click moves the cursor and focuses the window under the pointer. A
+  click outside the selection ends VISUAL; INSERT and REPLACE continue
+  at the new position. The wheel scrolls the window under the pointer,
+  focusing it.
 - Drag selects (VISUAL) and stays in the window it started in. Release
   copies to the X PRIMARY selection via `vis-clipboard`.
 - Double click selects the WORD under the pointer, or the whole line
@@ -255,8 +256,10 @@ Defaults, in `lua/vis-mouse.lua`:
   click while dragging inserts the clipboard.
 - `:set mouse off` stops tracking.
 
-A "ghost cursor" marks the character under the pointer in whichever
-window it is over, styled as a selection by default (`mouse.ghost_style`).
+`mouse.ghost_cursor = true` marks the character under the pointer in
+whichever window it is over, styled as a selection by default
+(`mouse.ghost_style`). It is off by default; it was built as a hit-test
+check.
 
 ## Known limits
 

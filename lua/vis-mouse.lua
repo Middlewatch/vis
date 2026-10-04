@@ -225,10 +225,13 @@ function mouse.single_click(ms)
 	if not gpos then return end
 	local currange = vis.win.selection.range
 
-	-- remove anchor and enter normal if click outside the original selection
+	-- a click outside the selection drops it; a visual mode ends, but
+	-- INSERT and REPLACE keep going at the new position
 	if (gpos < currange.start or gpos > currange.finish) then
 		vis.win.selection.anchored = false
-		vis.mode = vis.modes.NORMAL
+		if (vis.mode == vis.modes.VISUAL or vis.mode == vis.modes.VISUAL_LINE) then
+			vis.mode = vis.modes.NORMAL
+		end
 	end
 
 	vis.win.selection.pos = gpos
@@ -315,8 +318,11 @@ vis.events.subscribe(events.DRAG, mouse.dragged)
 vis.events.subscribe(events.RELEASE, mouse.release)
 vis.events.subscribe(events.CHORD_RELEASE, mouse.chord_release)
 
+-- ghost cursor: mark the character under the pointer; off by default
+mouse.ghost_cursor = false
+
 vis.events.subscribe(vis.events.WIN_HIGHLIGHT, function(win)
-	-- draw the ghost cursor in whichever window the pointer is over
+	if not mouse.ghost_cursor then return end
 	local target, pos = mouse.resolve(state.current)
 	if target ~= win or not pos then return end
 	local style = mouse.ghost_style or vis.ui.style_ids.SELECTION
