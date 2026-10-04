@@ -347,6 +347,51 @@ vis_window_at(Vis *vis, int x, int y)
 	return NULL;
 }
 
+void
+vis_overlay_show(Vis *vis, int x, int y, int width, int height, int style_id)
+{
+	UiOverlay *overlay = &vis->ui.overlay;
+	overlay->x           = MAX(x, 0);
+	overlay->y           = MAX(y, 0);
+	overlay->width       = MAX(width, 0);
+	overlay->height      = MAX(height, 0);
+	overlay->style_id    = Between(style_id, 0, vis->ui.style_count - 1) ? style_id : UI_STYLE_DEFAULT;
+	overlay->lines.count = 0;
+	overlay->text.length = 0;
+	overlay->visible     = true;
+}
+
+bool
+vis_overlay_line(Vis *vis, const char *text, size_t length, int style_id)
+{
+	UiOverlay *overlay = &vis->ui.overlay;
+	s32 offset = overlay->text.length;
+	if (!buffer_append(&overlay->text, text, length))
+		return false;
+	UiOverlayLine *line = da_push(vis, &overlay->lines);
+	line->offset   = offset;
+	line->length   = length;
+	line->style_id = Between(style_id, 0, vis->ui.style_count - 1) ? style_id : overlay->style_id;
+	return true;
+}
+
+void
+vis_overlay_hide(Vis *vis)
+{
+	vis->ui.overlay.visible = false;
+}
+
+int
+vis_overlay_at(Vis *vis, int x, int y)
+{
+	UiOverlay *overlay = &vis->ui.overlay;
+	if (overlay->visible &&
+	    x >= overlay->x && x < overlay->x + overlay->width &&
+	    y >= overlay->y && y < overlay->y + overlay->height)
+		return y - overlay->y;
+	return -1;
+}
+
 Win *window_new_file(Vis *vis, File *file, enum UiOption options) {
 	Win *win = calloc(1, sizeof(Win));
 	if (!win)

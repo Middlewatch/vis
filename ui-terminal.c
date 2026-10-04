@@ -325,6 +325,75 @@ ui_draw_string(Ui *tui, int x, int y, const char *str, uint16_t style_id)
 	}
 }
 
+/* NOTE: draws text into at most width cells of row y starting at column x.
+ * Handles wide characters and shows control characters as ^X. The cells
+ * keep their current style */
+VIS_INTERNAL void
+ui_draw_text(Ui *tui, int x, int y, int width, str8 text)
+{
+	if (x < 0 || y < 0 || y >= tui->height)
+		return;
+	width = MIN(width, tui->width - x);
+
+	VisCellData *cells = tui->cell_buffer.cells + y * tui->width + x;
+	s32 column = 0;
+	while (text.length && column < width) {
+		VisCell cell = vis_cell_from_string(&text);
+		if VisCellInvalid(cell)
+			break;
+
+		if (cell.file_byte_count == 1 && (cell.data[0] < 0x20 || cell.data[0] == 0x7f)) {
+			u8 previous = cell.data[0];
+			cell.data[0]         = '^';
+			cell.data[1]         = previous == 0x7f ? '?' : previous + 0x40;
+			cell.data_length     = 2;
+			cell.width           = 2;
+			cell.file_byte_count = 1;
+		}
+
+		if (column + cell.width <= width) {
+			memory_copy(cells + column, &cell, sizeof(VisCellData));
+			if (cell.width == 2) {
+				cells[column + 1].width       = 0;
+				cells[column + 1].data_length = 0;
+			}
+		}
+
+		column += cell.width;
+	}
+}
+
+VIS_INTERNAL void
+ui_overlay_draw(Ui *tui)
+{
+	UiOverlay *overlay = &tui->overlay;
+	if (!overlay->visible)
+		return;
+
+	int x_end = MIN(overlay->x + overlay->width, tui->width);
+	VisCellData blank = {.data = {' '}, .data_length = 1, .width = 1};
+	for (int row = 0; row < overlay->height; row++) {
+		int y = overlay->y + row;
+		if (y >= tui->height)
+			break;
+
+		UiOverlayLine *line = row < overlay->lines.count ? overlay->lines.data + row : 0;
+		u16 style_id = line ? line->style_id : overlay->style_id;
+		VisCellStyle style = vis_cell_style_merge(tui->styles[UI_STYLE_DEFAULT], tui->styles[style_id]);
+		VisCellData  *cells  = tui->cell_buffer.cells  + y * tui->width;
+		VisCellStyle *styles = tui->cell_buffer.styles + y * tui->width;
+		for (int x = overlay->x; x < x_end; x++) {
+			cells[x]  = blank;
+			styles[x] = style;
+		}
+
+		if (line) {
+			str8 text = {.data = (u8 *)overlay->text.data + line->offset, .length = line->length};
+			ui_draw_text(tui, overlay->x, y, overlay->width, text);
+		}
+	}
+}
+
 VIS_INTERNAL uint8_t
 u32_count_digits(uint32_t a)
 {
@@ -480,6 +549,7 @@ ui_draw(Vis *vis)
 	ui_arrange(vis, vis->ui.layout);
 	for (Win *win = vis->windows; win; win = win->next)
 		ui_window_draw(win);
+	ui_overlay_draw(tui);
 
 	/* determine primary cursor's position */
 	if (vis->win) {
@@ -498,34 +568,8 @@ ui_draw(Vis *vis)
 	}
 
 	if unlikely(tui->info_length) {
-		VisCellData *cells = tui->cell_buffer.cells + (tui->height - 1) * tui->width;
 		str8 info = {.data = (u8 *)tui->info, .length = tui->info_length};
-
-		u32 column = 0;
-		while (info.length && column < tui->width) {
-			VisCell cell = vis_cell_from_string(&info);
-			if VisCellInvalid(cell)
-				break;
-
-			if (cell.file_byte_count == 1 && (cell.data[0] < 0x20 || cell.data[0] == 0x7f)) {
-				u8 previous = cell.data[0];
-				cell.data[0]         = '^';
-				cell.data[1]         = previous == 0x7f ? '?' : previous + 0x40;
-				cell.data_length     = 2;
-				cell.width           = 2;
-				cell.file_byte_count = 1;
-			}
-
-			if (column + cell.width <= tui->width) {
-				memory_copy(cells + column, &cell, sizeof(VisCellData));
-				if (cell.width == 2) {
-					cells[column + 1].width       = 0;
-					cells[column + 1].data_length = 0;
-				}
-			}
-
-			column += cell.width;
-		}
+		ui_draw_text(tui, 0, tui->height - 1, tui->width, info);
 	}
 
 	vis_event_emit(vis, VIS_EVENT_UI_DRAW);
@@ -681,6 +725,8 @@ ui_terminal_free(Ui *tui)
 	termkey_destroy(&tui->termkey);
 	if (tui->cell_buffer.size) munmap(tui->cell_buffer.cells, tui->cell_buffer.size);
 	free(tui->term.data);
+	buffer_release(&tui->overlay.text);
+	free(tui->overlay.lines.data);
 }
 
 VIS_INTERNAL bool

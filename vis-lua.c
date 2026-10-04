@@ -571,19 +571,28 @@ static int windows_iter(lua_State *L) {
  *
  * Coordinates are 1-based terminal rows and columns as reported by the
  * @{MOUSE} event. A cell on the sidebar maps to the first text column of
- * its row; a cell on the status bar yields a window but no position.
+ * its row; a cell on the status bar yields a window but no position. A
+ * cell on the overlay (see @{overlay_show}) yields no window, the 1-based
+ * overlay row and `"overlay"`.
  *
  * @function win_at
  * @tparam int line the terminal row
  * @tparam int col the terminal column
  * @treturn Window the window under the cell, or `nil`
  * @treturn int the file position under the cell, or `nil`
- * @treturn string which part of the window was hit: `"text"`, `"sidebar"` or `"status"`
+ * @treturn string which part was hit: `"text"`, `"sidebar"`, `"status"` or `"overlay"`
  */
 static int win_at(lua_State *L) {
 	Vis *vis = obj_ref_check(L, 1, "vis");
 	int y = luaL_checkinteger(L, 2) - 1;
 	int x = luaL_checkinteger(L, 3) - 1;
+	int overlay_row = vis_overlay_at(vis, x, y);
+	if (overlay_row >= 0) {
+		lua_pushnil(L);
+		lua_pushinteger(L, overlay_row + 1);
+		lua_pushliteral(L, "overlay");
+		return 3;
+	}
 	Win *win = vis_window_at(vis, x, y);
 	if (!win || !obj_ref_new(L, win, VIS_LUA_TYPE_WINDOW)) {
 		lua_pushnil(L);
@@ -742,6 +751,88 @@ static int message(lua_State *L) {
 	Vis *vis = obj_ref_check(L, 1, "vis");
 	const char *msg = luaL_checkstring(L, 2);
 	vis_message_show(vis, msg);
+	return 0;
+}
+
+/***
+ * Show the overlay, a rectangle of styled text drawn over the windows.
+ *
+ * There is one overlay and each call replaces its content. It is drawn
+ * after the windows on every redraw and stays until @{overlay_hide}, so
+ * the caller decides when it goes away, for instance on the next key or
+ * when the window it belongs to closes. The cursor stays in the focused
+ * window. Mouse clicks on it are reported by @{win_at} as `"overlay"`.
+ *
+ * @function overlay_show
+ * @tparam table overlay
+ * @tparam int overlay.x 0-based terminal column of the top left corner
+ * @tparam int overlay.y 0-based terminal row of the top left corner
+ * @tparam {string,...} overlay.lines one string per row, cut at the right edge
+ * @tparam[opt] int overlay.width the width in cells, defaults to the widest line
+ * @tparam[opt] int overlay.height the height in rows, defaults to the number of lines
+ * @tparam[opt] int overlay.style style id of the rectangle, defaults to `ui.style_ids.STATUS`
+ * @tparam[opt] {int,...} overlay.styles per row style ids overriding `style`
+ * @see style_define
+ * @usage
+ * vis:overlay_show{x = 4, y = 2, lines = {"first", "second"}}
+ */
+static int overlay_show(lua_State *L) {
+	Vis *vis = obj_ref_check(L, 1, "vis");
+	luaL_checktype(L, 2, LUA_TTABLE);
+	lua_getfield(L, 2, "x");
+	lua_getfield(L, 2, "y");
+	lua_getfield(L, 2, "width");
+	lua_getfield(L, 2, "height");
+	lua_getfield(L, 2, "style");
+	int x      = luaL_optinteger(L, -5, 0);
+	int y      = luaL_optinteger(L, -4, 0);
+	int width  = luaL_optinteger(L, -3, -1);
+	int height = luaL_optinteger(L, -2, -1);
+	int style  = luaL_optinteger(L, -1, UI_STYLE_STATUS);
+	lua_pop(L, 5);
+	lua_getfield(L, 2, "lines");
+	lua_getfield(L, 2, "styles");
+	size_t count = lua_istable(L, 3) ? lua_rawlen(L, 3) : 0;
+	bool styles = lua_istable(L, 4);
+
+	if (width < 0) {
+		width = 0;
+		for (size_t i = 1; i <= count; i++) {
+			size_t len;
+			lua_rawgeti(L, 3, i);
+			const char *line = lua_tolstring(L, -1, &len);
+			if (line)
+				width = MAX(width, text_string_width(line, len));
+			lua_pop(L, 1);
+		}
+	}
+	if (height < 0)
+		height = count;
+
+	vis_overlay_show(vis, x, y, width, height, style);
+	for (size_t i = 1; i <= count; i++) {
+		size_t len = 0;
+		lua_rawgeti(L, 3, i);
+		const char *line = lua_tolstring(L, -1, &len);
+		int line_style = -1;
+		if (styles) {
+			lua_rawgeti(L, 4, i);
+			line_style = luaL_optinteger(L, -1, -1);
+			lua_pop(L, 1);
+		}
+		vis_overlay_line(vis, line ? line : "", len, line_style);
+		lua_pop(L, 1);
+	}
+	return 0;
+}
+
+/***
+ * Hide the overlay.
+ * @function overlay_hide
+ */
+static int overlay_hide(lua_State *L) {
+	Vis *vis = obj_ref_check(L, 1, "vis");
+	vis_overlay_hide(vis);
 	return 0;
 }
 
@@ -1704,6 +1795,8 @@ static const struct luaL_Reg vis_lua[] = {
 	{ "command", command },
 	{ "info", info },
 	{ "message", message },
+	{ "overlay_show", overlay_show },
+	{ "overlay_hide", overlay_hide },
 	{ "map", map },
 	{ "unmap", unmap },
 	{ "mappings", mappings },

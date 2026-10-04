@@ -314,6 +314,26 @@ VIS_EXPORT void vis_info_show(Vis *vis, const char *msg, ...) __attribute__((for
  * @param msg The message to display.
  */
 VIS_EXPORT void vis_message_show(Vis *vis, const char *msg);
+/**
+ * Show the overlay, a rectangle of styled text drawn over the windows on
+ * every redraw, with its top left corner at the zero based terminal cell
+ * (``x``, ``y``). There is one overlay; this clears its lines, add new ones
+ * with vis_overlay_line(). It stays until vis_overlay_hide() is called.
+ * @param style_id The style of rows without a line.
+ */
+VIS_EXPORT void vis_overlay_show(Vis*, int x, int y, int width, int height, int style_id);
+/**
+ * Append a line to the overlay. Text wider than the overlay is cut off.
+ * @param style_id The style of the row, or ``-1`` for the overlay's style.
+ */
+VIS_EXPORT bool vis_overlay_line(Vis*, const char *text, size_t length, int style_id);
+/** Hide the overlay. */
+VIS_EXPORT void vis_overlay_hide(Vis*);
+/**
+ * Get the overlay row covering the zero based terminal cell (``x``, ``y``).
+ * @return The zero based row, or ``-1`` if the overlay does not cover the cell.
+ */
+VIS_EXPORT int vis_overlay_at(Vis*, int x, int y);
 /** @} */
 
 /*

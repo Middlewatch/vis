@@ -33,6 +33,29 @@ window origin and sidebar width), so it is exact with line numbers,
 tabs, wide characters, soft wrapping and splits. Columns past the end of
 a line map to its last cell, rows below the text to the last line.
 
+## Overlay
+
+vis draws into buffer cells, one status line per window, and the info
+line; there was no surface for a popup. The fork adds one overlay, a
+rectangle of styled text painted over the windows after every redraw:
+
+    vis:overlay_show{x = 4, y = 2, lines = {"first", "second"},
+                     width = 20, height = 3, style = id, styles = {id1, id2}}
+    vis:overlay_hide()
+
+`x` and `y` are 0-based terminal cells like `win:style_pos`. `width`
+defaults to the widest line and `height` to the number of lines; rows
+without a line are filled in `style` (default `ui.style_ids.STATUS`),
+and `styles` overrides the style per row. Lines are cut at the right
+edge; wide characters are handled and control characters shown as `^X`.
+The overlay is not tied to a window and stays until hidden, so the
+feature that showed it decides when it goes. The cursor stays in the
+focused window. `vis:win_at` reports a cell on the overlay as
+`nil, row, "overlay"` with the 1-based overlay row, and `vis-mouse`
+routes a single click there to `mouse.overlay_click(row, state)` instead
+of moving the cursor. Completion lists, hint menus, hover text, context
+menus and pickers are all meant to draw through it.
+
 Nothing is reported until something enables mouse tracking in the
 terminal. `lua/vis-mouse.lua` does that on `START` (`\e[?1003h` for all
 motion, `\e[?1006h` for SGR encoding) and turns it off on `QUIT`.

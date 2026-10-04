@@ -126,6 +126,25 @@ typedef struct {
 } VisCellBuffer;
 
 typedef struct {
+	s32 offset;   /* start of the line text in UiOverlay::text */
+	s32 length;
+	u16 style_id;
+} UiOverlayLine;
+
+/* A rectangle of styled text drawn over the windows, see vis_overlay_show() */
+typedef struct {
+	Buffer text;               /* text of all lines, back to back */
+	struct {
+		UiOverlayLine *data;
+		VisDACount     count;
+		VisDACount     capacity;
+	} lines;
+	int  x, y, width, height;  /* zero based terminal cell rectangle */
+	u16  style_id;             /* style of rows without a line */
+	bool visible;
+} UiOverlay;
+
+typedef struct {
 	s16  *palette;
 	s16   color_pairs_max;
 	s16   color_pair_current;
@@ -164,6 +183,8 @@ typedef struct {
 	// static_assert(S16_MAX <= UI_MAX_WIDTH)
 	char info[UI_MAX_WIDTH];   /* info message displayed at the bottom of the screen */
 	s16  info_length;
+
+	UiOverlay overlay;         /* drawn over the windows on every redraw */
 
 	// static_assert(U16_MAX <= UI_STYLE_MAX)
 	u16          style_count;  /* count of styles currently in use */
