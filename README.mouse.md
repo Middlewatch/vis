@@ -155,9 +155,10 @@ the bar to the default handler.
 On a pending prefix it lists the bindings under that prefix from
 `vis:mappings(vis.mode)` in a box just above the status line: a title row
 with the prefix and its group name, then the entries in columns, each the
-next key and either its help text or `+group` when more keys follow.
-Help longer than `hints.text_width` cells is cut so several columns
-fit, and at most `hints.max_rows` rows are drawn, the rest counted in
+next key, `hints.sep` (an arrow) and either its help text or `+group`
+when more keys follow; the key and the arrow take `hints.colors.key`
+and `hints.colors.sep` over the row. Help longer than
+`hints.text_width` cells is cut so several columns fit, and at most `hints.max_rows` rows are drawn, the rest counted in
 the title. Group names live in `hints.groups`, keyed by the full sequence; a typed
 space reaches the mappings as a literal `" "`, so leader bindings are
 mapped as `" ff"`, `" bd"` and so on, and `hints.leader` is that string.
@@ -185,7 +186,8 @@ opens it by hand, and a server trigger character such as `.` opens it
 with the server's items alone. Server items arrive asynchronously and
 are filtered by the typed prefix on the client, case-insensitively;
 snippets lose their placeholders (`${1:x}` keeps `x`). Each row shows
-the label and its kind. Knobs: `completion.keys`, `completion.colors`,
+the label and its kind, the kind in `completion.colors.kind` (dim by
+default). Knobs: `completion.keys`, `completion.colors`,
 `completion.max_rows`, `completion.min_chars`, `completion.buffer_words`
 and `completion.max_scan` (files over that size give no buffer words).
 

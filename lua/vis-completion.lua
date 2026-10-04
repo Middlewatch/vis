@@ -43,10 +43,11 @@ completion.keys = {
 	accept = "<Enter>",
 }
 
--- one style per overlay row
+-- the rows, and the kind tag whose style merges over the row's
 completion.colors = {
 	entry = "fore:white,back:black",
 	selected = "fore:black,back:blue",
+	kind = "dim",
 }
 
 -- CompletionItemKind to the tag shown after the label
@@ -289,14 +290,15 @@ local function show(win)
 	for r = 1, rows do
 		local i = state.first + r - 1
 		local c = state.candidates[i]
-		local line = " " .. pad(cut(c.label, labelw), labelw)
-		if kindw > 0 then line = line .. "  " .. pad(c.kind, kindw) end
-		lines[r] = line .. " "
+		local line = { " " .. pad(cut(c.label, labelw), labelw) }
+		if kindw > 0 then line[#line + 1] = { "  " .. pad(c.kind, kindw), style("kind") } end
+		line[#line + 1] = " "
+		lines[r] = line
 		stys[r] = style(i == state.selected and "selected" or "entry")
 	end
 
 	-- below the word's row when that fits above the last row, else above it
-	local w = len(lines[1])
+	local w = 1 + labelw + (kindw > 0 and 2 + kindw or 0) + 1
 	local py = y + 1
 	if py + rows > height - 1 then py = y - rows end
 	py = math.max(0, py)

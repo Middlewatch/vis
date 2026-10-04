@@ -41,11 +41,17 @@ hints.names = {
 	[" "] = "<Space>",
 }
 
--- one style per overlay row: the title row and the entry rows
+-- the title row, the entry rows, and within an entry the key and the
+-- separator, whose styles merge over the row's
 hints.colors = {
 	title = "fore:black,back:blue,bold",
 	entry = "fore:white,back:black",
+	key = "fore:cyan,bold",
+	sep = "dim",
 }
+
+-- drawn between a key and its text, with a space on each side
+hints.sep = "➜"
 
 -- entry rows at most; what does not fit is counted in the title
 hints.max_rows = 8
@@ -53,7 +59,7 @@ hints.max_rows = 8
 -- cells of help text per column; longer texts are cut so columns fit
 hints.text_width = 30
 
--- cells between the key and its text, and after each column
+-- cells after each column
 hints.gap = 2
 
 local styles = {}
@@ -158,21 +164,24 @@ local function show(prefix)
 		textw = math.max(textw, len(e.text))
 	end
 	textw = math.min(textw, hints.text_width)
-	local colw = math.min(width, keyw + hints.gap + textw + hints.gap)
+	local sep = " " .. hints.sep .. " "
+	local colw = math.min(width, keyw + len(sep) + textw + hints.gap)
 	local cols = math.max(1, width // colw)
 	local rows = math.min(hints.max_rows, math.ceil(#entries / cols))
 	local fit = rows * cols
 
 	local lines = {}
 	for r = 1, rows do
-		local cells = {}
+		local line = { " " }
 		for c = 0, cols - 1 do
 			local e = entries[c * rows + r]
 			if e then
-				cells[#cells + 1] = pad(pad(display(e.key), keyw + hints.gap) .. cut(e.text, textw), colw)
+				line[#line + 1] = { pad(display(e.key), keyw), style("key") }
+				line[#line + 1] = { sep, style("sep") }
+				line[#line + 1] = pad(cut(e.text, textw), textw + hints.gap)
 			end
 		end
-		lines[r + 1] = " " .. table.concat(cells)
+		lines[r + 1] = line
 	end
 
 	local title = " " .. display_seq(prefix)
