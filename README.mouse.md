@@ -103,6 +103,24 @@ on `Vis`. It is the hook for a which-key style hint menu: on a prefix,
 draw the bindings under it from `vis:mappings` in the overlay; on `nil`,
 hide it.
 
+## Modeline
+
+`lua/vis-modeline.lua` is a `WIN_STATUS` handler that builds a
+lualine-style bar from status segments:
+
+    modeline = require('vis-modeline')
+
+Left: mode block (focused window only), git branch, file name, modified
+flag, LSP diagnostic counts. Right: pending keys or count, selection
+index, LSP server name, syntax, percentage, line and column. The branch
+comes from `.git/HEAD` (worktrees followed), cached per directory and
+re-read every `modeline.git_refresh` seconds, so no subprocess runs. LSP
+state is read from vis-lspc's `open_files` table when that module is
+loaded; without it those segments are simply absent. `modeline.colors`
+holds the style strings and `modeline.symbols` the glyphs; set them in
+`visrc.lua` before the first redraw. `modeline.enabled = false` returns
+the bar to the default handler.
+
 Nothing is reported until something enables mouse tracking in the
 terminal. `lua/vis-mouse.lua` does that on `START` (`\e[?1003h` for all
 motion, `\e[?1006h` for SGR encoding) and turns it off on `QUIT`.
