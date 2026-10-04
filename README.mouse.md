@@ -24,6 +24,15 @@ Now `getkey()` in `vis.c` turns a `TERMKEY_TYPE_MOUSE` key into a
 Motion with no button held arrives as `type == 3, button == 0`; that is
 how termkey reports it.
 
+The hit test lives in C too. `vis:win_at(line, col)` takes the same
+1-based terminal cell and returns the window under it, the file position
+of that cell (`nil` on the status bar), and which part of the window was
+hit: `"text"`, `"sidebar"` or `"status"`. It reads the screen layout
+`view.c` already keeps (per-line byte lengths, per-cell byte counts,
+window origin and sidebar width), so it is exact with line numbers,
+tabs, wide characters, soft wrapping and splits. Columns past the end of
+a line map to its last cell, rows below the text to the last line.
+
 Nothing is reported until something enables mouse tracking in the
 terminal. `lua/vis-mouse.lua` does that on `START` (`\e[?1003h` for all
 motion, `\e[?1006h` for SGR encoding) and turns it off on `QUIT`.
@@ -43,25 +52,25 @@ Add to `visrc.lua`:
 Defaults, in `lua/vis-mouse.lua`:
 
 - Wheel scrolls (`<C-y>` / `<C-e>`).
-- Click moves the cursor; in INSERT it also returns to NORMAL.
-- Drag selects (VISUAL). Release copies to the X PRIMARY selection via
-  `vis-clipboard`.
+- Click moves the cursor and focuses the window under the pointer; in
+  INSERT it also returns to NORMAL. The wheel scrolls the window under
+  the pointer, focusing it.
+- Drag selects (VISUAL) and stays in the window it started in. Release
+  copies to the X PRIMARY selection via `vis-clipboard`.
 - Double click selects the WORD under the pointer, or the whole line
-  when the click lands on a newline or terminal column 1.
+  when the click lands on a newline or in the line-number sidebar.
 - Chords: right click while dragging copies to the clipboard; middle
   click while dragging inserts the clipboard.
 - `:set mouse off` stops tracking.
 
-A "ghost cursor" marks the character the plugin thinks is under the
-pointer, styled as a selection by default (`mouse.ghost_style`).
+A "ghost cursor" marks the character under the pointer in whichever
+window it is over, styled as a selection by default (`mouse.ghost_style`).
 
 ## Known limits
 
-The pointer-to-byte mapping is still estimated in Lua from the viewport
-text, tabwidth and wrapcolumn. It is exact for a single window of plain
-ASCII and drifts with line numbers, inline tabs, wide characters, soft
-wrapping and multiple windows. The screen layout in `view.c` already
-knows the exact answer; moving the hit test there is the next step.
+Splits: a drag that leaves its window is ignored rather than clamped.
+The ghost cursor needs a redraw to move, so it lags motion over a window
+that has nothing else to redraw.
 
 Tested in tmux and a raw pty with `TERM=xterm-256color`. Reports from
 other terminals are welcome.

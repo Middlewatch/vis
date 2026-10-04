@@ -116,5 +116,6 @@ vis Lua, which would rebuild a file tree inside a buffer.
 
 ## Status
 
-Done: `MOUSE` event, termkey SGR `kmous` fix, `vis-mouse.lua` port
-(see `README.mouse.md`). Everything above is open.
+Done: `MOUSE` event, termkey SGR `kmous` fix, `vis-mouse.lua` port, P1
+hit test as `vis:win_at` (see `README.mouse.md`). Everything else is
+open.

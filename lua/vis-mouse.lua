@@ -62,6 +62,22 @@ mouse.events = events
 
 mouse.options = { mouse = true }
 
+-- resolve the terminal cell under the mouse: window, file position (nil on
+-- the status bar) and which part of the window was hit ("text", "sidebar"
+-- or "status")
+function mouse.resolve(m)
+	return vis:win_at(m.line, m.col)
+end
+
+-- like mouse.resolve, but also focus the window under the mouse
+local function focus_resolve(m)
+	local win, pos, where = mouse.resolve(m)
+	if win and win ~= vis.win then
+		vis.win = win
+	end
+	return win, pos, where
+end
+
 vis:option_register("mouse", "bool", function(value, toggle)
 	if toggle then
 		mouse.options.mouse = not mouse.options.mouse
@@ -155,11 +171,11 @@ function mouse.double_click(state)
 	-- double clicking, by default, selects the WORD under the cursor
 	-- If the cursor is on column 1, start a line selection
 	-- same if the cursor is on a newline
-	local win = vis.win
-	local guessedpos = guess_mouse_pos(state.current)
+	local win, guessedpos, where = focus_resolve(state.current)
+	if not guessedpos then return end
 	local charatpos = win.file:content(guessedpos, 1)
 
-	if (state.current.col == 1 or charatpos == "\n") then
+	if (where == "sidebar" or charatpos == "\n") then
 		win.selection.pos = guessedpos
 		vis.mode = vis.modes.VISUAL_LINE
 		vis:feedkeys("0$") -- ensure it always selects the clicked line
@@ -180,14 +196,17 @@ end
 function mouse.single_click(state)
 	-- wheel motions don't create release events and aren't clicks
 	if (state.current.button == BUTTON.WHEELUP) then
+		focus_resolve(state.current)
 		vis:feedkeys("<C-y>")
 		return
 	elseif (state.current.button == BUTTON.WHEELDOWN) then
+		focus_resolve(state.current)
 		vis:feedkeys("<C-e>")
 		return
 	end
 
-	local gpos = guess_mouse_pos(state.current)
+	local _, gpos = focus_resolve(state.current)
+	if not gpos then return end
 	local currange = vis.win.selection.range
 
 	-- remove anchor and enter normal if click outside the original selection
@@ -206,6 +225,9 @@ end
 
 -- perform actions for when the mouse is moved with at least one button held down
 function mouse.dragged(state)
+	-- a drag stays in the window it started in
+	local win, pos = mouse.resolve(state.current)
+	if win ~= vis.win or not pos then return end
 	if (vis.win.selection.anchored == false) then
 		-- just started dragging
 		vis.win.selection.anchored = true
@@ -214,7 +236,7 @@ function mouse.dragged(state)
 	if (vis.mode ~= vis.modes.VISUAL and vis.mode ~= vis.modes.VISUAL_LINE) then
 		vis.mode = vis.modes.VISUAL
 	end
-	vis.win.selection.pos = guess_mouse_pos(state.current)
+	vis.win.selection.pos = pos
 	-- make sure VISUAL LINE continues to select entire lines
 	if (vis.mode == vis.modes.VISUAL_LINE) then
 		vis:feedkeys('0$')
@@ -269,71 +291,6 @@ function mouse.chord_release(state)
 	end
 end
 
--- calculate the approximate closest file position to the cursor
-function guess_mouse_pos(mouse)
-	local win = vis.win
-	local visible = win.file:content(win.viewport.bytes)
-
-	-- take note of options that affect cursor coordinates
-	local tw = win.options.tabwidth
-	local wc = win.options.wrapcolumn
-	if (wc == 0) then wc = win.width end
-
-	local lineschecked = 1
-	local linestart = 0 -- the first character of the line the cursor is on
-	local lastnewline = 0 -- record the last newline found...
-	local charsprinted = 0 -- how many characters have been printed, visually
-
-	-- find where the current line starts
-	while (lineschecked < mouse.line
-		and linestart < visible:len()) do
-		linestart = linestart + 1
-		charsprinted = charsprinted + 1
-
-		-- adjust for tabstop
-		if (visible:sub(linestart, linestart) == '\t') then
-			charsprinted = charsprinted + (tw - (charsprinted % tw))
-		end
-
-		-- detect newlines/column wraps
-		if (visible:sub(linestart, linestart) == '\n'
-			or (charsprinted) >= wc) then
-			lastnewline = linestart
-			lineschecked = lineschecked + 1
-			charsprinted = 0
-		end
-	end
-
-	-- Guess column
-	charsprinted = 0
-	local coloffset = 0 -- bytes
-	local remainingview
-	if (lineschecked == 1) then
-		remainingview = visible
-	else
-		remainingview = visible:sub(linestart + 1)
-	end
-
-	while (charsprinted < mouse.col and charsprinted < wc) do
-		coloffset = coloffset + 1
-		local currentchar = remainingview:sub(coloffset, coloffset)
-		if (currentchar == '\n') then
-			break
-		elseif (currentchar == '\t') then
-			charsprinted = charsprinted + (tw - (charsprinted % tw))
-		else
-			charsprinted = charsprinted + 1
-		end
-	end
-	coloffset = coloffset - 1
-
-	local guess = win.viewport.bytes.start + linestart + coloffset
-	if (guess < win.viewport.bytes.start) then guess = win.viewport.bytes.start end
-	if (guess > win.viewport.bytes.finish) then guess = win.viewport.bytes.finish end
-
-	return guess
-end
-
 -- XXX comment/unsubscribe as necessary to customise behaviour.
 vis.events.subscribe(vis.events.MOUSE, update_mouse_state)
 vis.events.subscribe(events.PRESS, mouse.single_click)
@@ -342,12 +299,12 @@ vis.events.subscribe(events.DRAG, mouse.dragged)
 vis.events.subscribe(events.RELEASE, mouse.release)
 vis.events.subscribe(events.CHORD_RELEASE, mouse.chord_release)
 
-vis.events.subscribe(vis.events.WIN_HIGHLIGHT, function()
-	if (not vis.win) then return end
-	-- draw ghost cursor
+vis.events.subscribe(vis.events.WIN_HIGHLIGHT, function(win)
+	-- draw the ghost cursor in whichever window the pointer is over
+	local target, pos = mouse.resolve(state.current)
+	if target ~= win or not pos then return end
 	local style = mouse.ghost_style or vis.ui.style_ids.SELECTION
-	local guess = guess_mouse_pos(state.current)
-	vis.win:style(style, guess, guess)
+	win:style(style, pos, pos)
 end)
 
 
