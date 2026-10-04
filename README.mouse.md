@@ -166,7 +166,8 @@ space reaches the mappings as a literal `" "`, so leader bindings are
 mapped as `" ff"`, `" bd"` and so on, and `hints.leader` is that string.
 By default only prefixes starting with the leader open the box
 (`hints.triggers`); set it to `nil` for every prefix, `g` and `<C-w>`
-included. The box goes when the prefix resolves or is abandoned. There is
+included. A click on an entry types its key. The box goes when the
+prefix resolves or is abandoned. There is
 no delay: vis has no timer, so the box appears on the first key. Terminal
 size comes from `vis.ui.width` and `vis.ui.height`, a one-line addition
 in `vis-lua.c` that the box needs to anchor itself to the bottom.

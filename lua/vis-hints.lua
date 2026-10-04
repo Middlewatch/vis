@@ -5,7 +5,8 @@
 -- On KEYS_PENDING the bindings under the typed prefix are listed in the
 -- overlay just above the status line, in columns: the next key, then its
 -- help text from vis:mappings, or a group name from `hints.groups` when
--- more keys follow. The box goes when the prefix resolves or is dropped.
+-- more keys follow. A click on an entry types its key. The box goes when
+-- the prefix resolves or is dropped.
 -- `hints.triggers` limits the menu to some prefixes (the leader by
 -- default); set it to nil for every prefix. Colors come from
 -- `hints.colors`, read when a style is first used.
@@ -146,11 +147,22 @@ local function collect(prefix)
 end
 
 local shown = false
+local layout -- entries and column geometry of the box shown, for clicks
 
 local function hide()
 	if not shown then return end
 	shown = false
+	layout = nil
 	overlay.hide(hints)
+end
+
+-- a click on an entry types its key, continuing the pending sequence
+local function clicked(row, m)
+	if not layout or row < 2 then return end
+	local x = (m.col or 1) - 2 -- 0-based cell past the leading space
+	if x < 0 then return end
+	local e = layout.entries[(x // layout.colw) * layout.rows + row - 1]
+	if e then vis:feedkeys(e.key) end
 end
 
 local function show(prefix)
@@ -194,11 +206,12 @@ local function show(prefix)
 	for r = 2, #lines do stys[r] = style("entry") end
 
 	shown = true
+	layout = { entries = entries, rows = rows, colw = colw }
 	overlay.show(hints, {
 		x = 0, y = math.max(0, height - 1 - #lines),
 		width = width, lines = lines,
 		style = style("entry"), styles = stys,
-	})
+	}, clicked)
 end
 
 local function triggered(prefix)
