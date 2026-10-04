@@ -30,6 +30,9 @@ completion.max_width = 40
 -- offer words of the file; files over max_scan bytes give none
 completion.buffer_words = true
 completion.max_scan = 512 * 1024
+-- number of word scans so far; a word costs two, its first character and
+-- the key that ends it, since typing inside it leaves the other words alone
+completion.scans = 0
 
 -- the vis-lspc module; found in package.loaded when nil
 completion.lspc = nil
@@ -93,18 +96,14 @@ local function word_before(file, pos)
 	return pos - #w, w
 end
 
--- words of a file, rescanned after a change
+-- words of a file, rescanned after a change outside the word being typed
 local words_cache = setmetatable({}, { __mode = "k" })
-
-vis.events.subscribe(vis.events.TEXT_CHANGED, function(file)
-	local c = words_cache[file]
-	if c then c.stale = true end
-end)
 
 local function buffer_words(file, prefix, taken)
 	local c = words_cache[file]
 	if not c or c.stale then
 		c = { stale = false, words = {} }
+		completion.scans = completion.scans + 1
 		if file.size <= completion.max_scan then
 			local text = file:content(0, file.size) or ""
 			for w in text:gmatch("[%a_][%w_]*") do
@@ -201,6 +200,28 @@ local function hide(drop)
 		state.incomplete, state.selected, state.first = false, nil, 1
 	end
 end
+
+-- word characters put in or taken out at the end of the word being typed
+-- change no other word of the file, so the cache stays good; anything
+-- else, undo included (pos is nil), marks it stale. The file is asked
+-- rather than state.prefix, which lags while keys arrive in one batch:
+-- inserted bytes are in the file already, deleted ones still are.
+local function inside_word(file, pos, deleted, inserted)
+	local win = state.win
+	if not pos or not win or not state.start or win.file ~= file then return false end
+	inserted = inserted or ""
+	if not inserted:match("^[%w_]*$") then return false end
+	local n = pos + deleted - state.start
+	if n < 0 or n > 256 then return false end
+	if not (file:content(state.start, n) or ""):match("^[%w_]*$") then return false end
+	local after = file:content(pos + deleted + #inserted, 1) or ""
+	return after:match("^[%w_]$") == nil
+end
+
+vis.events.subscribe(vis.events.TEXT_CHANGED, function(file, pos, deleted, inserted)
+	local c = words_cache[file]
+	if c and not inside_word(file, pos, deleted, inserted) then c.stale = true end
+end)
 
 local function request(win, start)
 	local lspc = find_lspc()
