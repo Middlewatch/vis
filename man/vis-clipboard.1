@@ -68,6 +68,16 @@ WSL (Windows Subsystem for Linux)
 Cygwin
 .It Ev Pa termux-clipboard-{get,set}
 Termux
+.It OSC 52
+Fallback when nothing above applies and a controlling terminal exists,
+typically over SSH.
+Copy writes the selection to the terminal's clipboard with the OSC 52
+escape sequence, which terminals and multiplexers such as tmux and herdr
+pass through.
+Terminals rarely answer OSC 52 reads, so paste returns the text last copied
+from this host, kept in $XDG_RUNTIME_DIR, rather than the terminal's current
+clipboard.
+Use the terminal's own paste for text from elsewhere.
 .El
 .
 .Sh EXIT STATUS

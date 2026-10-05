@@ -69,6 +69,12 @@ vc_determine_command() {
 		fi
 	done
 
+	# No display: ask the terminal itself (OSC 52). Needs a controlling tty.
+	if command -v base64 >/dev/null 2>&1 && { : >/dev/tty; } 2>/dev/null; then
+		echo 'osc52'
+		return 0
+	fi
+
 	return 1
 }
 
@@ -184,6 +190,29 @@ vc_termux_copy() {
 
 vc_termux_paste() {
 	termux-clipboard-get
+}
+
+# OSC 52 writes the selection to the terminal's clipboard, through SSH and
+# multiplexers that pass it on. Terminals rarely answer OSC 52 reads, so the
+# copied text is also cached and --paste returns that cache: the last text
+# copied from this host, not the terminal's current clipboard.
+vc_osc52_cache() {
+	echo "${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/vis-clipboard-$(id -u).$sel"
+}
+
+vc_osc52_copy() {
+	cache="$(vc_osc52_cache)"
+	umask 077
+	cat >"$cache"
+	if [ "$sel" = "primary" ]; then target=p; else target=c; fi
+	# shellcheck disable=SC1003
+	printf '\033]52;%s;%s\033\\' "$target" "$(base64 <"$cache" | tr -d '\n')" >/dev/tty
+}
+
+vc_osc52_paste() {
+	cache="$(vc_osc52_cache)"
+	[ -f "$cache" ] || vc_fatal 'Nothing copied yet (OSC 52 cannot read the clipboard)'
+	cat "$cache"
 }
 
 while [ $# -gt 0 ]; do
