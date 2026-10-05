@@ -15,11 +15,13 @@ typedef struct {
 VIS_INTERNAL bool
 vis_cell_buffer_resize(VisCellBuffer *cb, u32 width, u32 height)
 {
+	u64 cell_count    = (u64)height * width;
+
 	// NOTE(rnp): extra space for dirty cell array, will generally just land in padding. Has
 	// a minimum size to ensure we can compute dirty cells with SIMD without a cleanup loop.
-	u64 bits_size     = height * width / 8 + 1;
-	u64 styles_offset = round_up_to(width * height * sizeof(VisCellData), 64);
-	u64 bits_offset   = styles_offset + round_up_to(width * height * sizeof(VisCellStyle), 64);
+	u64 bits_size     = cell_count / 8 + 1;
+	u64 styles_offset = round_up_to(cell_count * sizeof(VisCellData), 64);
+	u64 bits_offset   = styles_offset + round_up_to(cell_count * sizeof(VisCellStyle), 64);
 
 	u64 page_size = sysconf(_SC_PAGE_SIZE);
 	u64 size      = round_up_to(bits_offset + bits_size, page_size);
@@ -105,7 +107,7 @@ static void ui_window_resize(Win *win, int width, int height) {
 	bool status = win->options & UI_OPTION_STATUSBAR;
 	win->width  = width;
 	win->height = height;
-	view_resize(&win->view, width - win->sidebar_width, status ? height - 1 : height);
+	vis_view_resize(&win->view, width - win->sidebar_width, status ? height - 1 : height);
 }
 
 static void ui_window_move(Win *win, int x, int y) {
@@ -437,17 +439,17 @@ static void ui_window_draw(Win *win) {
 
 	int sidebar_width = 0;
 	if (sidebar) {
-		sidebar_width = u32_count_digits(view->lastline->lineno) + 1;
+		sidebar_width = u32_count_digits(view->lastline->line_number) + 1;
 		sidebar_width = MIN(win->width, MAX(sidebar_width, win->min_sidebar_width));
 	}
 	if (sidebar_width != win->sidebar_width) {
-		view_resize(view, width - sidebar_width, status ? height - 1 : height);
+		vis_view_resize(view, width - sidebar_width, status ? height - 1 : height);
 		win->sidebar_width = sidebar_width;
 	}
 	vis_window_draw(win);
 
 	Selection *sel = view_selections_primary_get(view);
-	size_t prev_lineno = 0, cursor_lineno = sel->line->lineno;
+	size_t prev_lineno = 0, cursor_lineno = sel->line->line_number;
 	int x = win->x, y = win->y;
 	int view_width = view->width;
 	// TODO(rnp): this should not be possible
@@ -458,15 +460,16 @@ static void ui_window_draw(Win *win) {
 	char sidebar_buffer[12];
 	VisCellData  *cells  = ui->cell_buffer.cells  + y * ui->width;
 	VisCellStyle *styles = ui->cell_buffer.styles + y * ui->width;
-	for (Line *l = view->topline; l; l = l->next, y++) {
+	for (s32 vy = 0; vy < view->height; vy++, y++) {
+		Line *l = view->lines + vy;
 		if (sidebar_width) {
-			s32 line_number = l->lineno;
+			s32 line_number = l->line_number;
 			sidebar_buffer[0] = 0;
-			if (l->lineno && l->len && l->lineno != prev_lineno) {
+			if (l->line_number && l->file_byte_count > 0 && l->line_number != prev_lineno) {
 				if (rnu) {
-					line_number = (win->options & UI_OPTION_LARGE_FILE) ? 0 : l->lineno;
-					if (l->lineno > cursor_lineno) line_number = l->lineno - cursor_lineno;
-					if (l->lineno < cursor_lineno) line_number = cursor_lineno - l->lineno;
+					line_number = (win->options & UI_OPTION_LARGE_FILE) ? 0 : l->line_number;
+					if (l->line_number > cursor_lineno) line_number = l->line_number - cursor_lineno;
+					if (l->line_number < cursor_lineno) line_number = cursor_lineno - l->line_number;
 				}
 				snprintf(sidebar_buffer, sizeof(sidebar_buffer), "%d ", line_number);
 			}
@@ -474,7 +477,7 @@ static void ui_window_draw(Win *win) {
 			s32 padding = sidebar_width - 1 - u32_count_digits(line_number);
 			if (sidebar_buffer[0] == 0) padding = sidebar_width;
 
-			u16 style_id = (l->lineno == cursor_lineno) ? UI_STYLE_LINENUMBER_CURSOR : UI_STYLE_LINENUMBER;
+			u16 style_id = (l->line_number == cursor_lineno) ? UI_STYLE_LINENUMBER_CURSOR : UI_STYLE_LINENUMBER;
 			VisCellData  cd    = {.data = {' '}, .data_length = 1, .width = 1};
 			VisCellStyle style = vis_cell_style_merge(ui->styles[UI_STYLE_DEFAULT], ui->styles[style_id]);
 			for (s32 xi = 0; xi < padding; xi++) {
@@ -482,12 +485,10 @@ static void ui_window_draw(Win *win) {
 				styles[x + xi] = style;
 			}
 			ui_draw_string(ui, x + padding, y, sidebar_buffer, style_id);
-			prev_lineno = l->lineno;
+			prev_lineno = l->line_number;
 		}
-		for (u32 vx = 0; vx < view_width; vx++) {
-			memory_copy(cells + x + sidebar_width + vx, l->cells + vx, sizeof(VisCellData));
-			styles[x + sidebar_width + vx] = l->cells[vx].style;
-		}
+		memory_copy(cells  + x + sidebar_width, view->cell_data   + vy * view_width, view_width * sizeof(VisCellData));
+		memory_copy(styles + x + sidebar_width, view->cell_styles + vy * view_width, view_width * sizeof(VisCellStyle));
 		cells  += ui->width;
 		styles += ui->width;
 	}

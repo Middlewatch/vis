@@ -523,11 +523,11 @@ static const char *keymapping(Vis *vis, const char *keys, const Arg *arg) {
  */
 /***
  * Scintillua lexer module.
- * @field lexers might be `nil` if module is not found
+ * @field lexers always a table, empty if the `lexer` or `lpeg` module is not found
  */
 /***
- * LPeg lexer module.
- * @field lpeg might be `nil` if module is not found
+ * LPeg module.
+ * @field lpeg `nil` if the `lpeg` module is not found
  */
 /***
  * Current count.
@@ -2107,8 +2107,8 @@ static int window_index(lua_State *L) {
 		if (strcmp(key, "viewport") == 0) {
 			Filerange b = VIEW_VIEWPORT_GET(win->view);
 			Filerange l;
-			l.start = win->view.topline->lineno;
-			l.end   = win->view.lastline->lineno;
+			l.start = win->view.lines[0].line_number;
+			l.end   = win->view.lastline->line_number;
 
 			lua_createtable(L, 0, 4);
 			lua_pushliteral(L, "bytes");

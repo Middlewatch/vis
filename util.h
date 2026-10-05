@@ -33,6 +33,9 @@
   #define CONFIG_ACL 0
 #endif
 
+#if defined(__APPLE__)
+# define _DARWIN_C_SOURCE
+#endif
 #undef _XOPEN_SOURCE
 #define _XOPEN_SOURCE 700
 
@@ -73,6 +76,8 @@
 #include <selinux/selinux.h>
 #endif
 
+#define read_only static const
+
 #define InvalidCodePath assert(0)
 
 #if defined(__clang__) || defined(__GNUC__)
@@ -99,6 +104,8 @@
 #define LENGTH(x)  ((int)(sizeof (x) / sizeof *(x)))
 #define MIN(a, b)  ((a) > (b) ? (b) : (a))
 #define MAX(a, b)  ((a) < (b) ? (b) : (a))
+
+#define AlignUpPowerOfTwo(x, v) (((x) + (v) - 1) & ~(v - 1))
 
 #define Between(x, a, b) ((x) >= (a) && (x) <= (b))
 #define Clamp(x, a, b)   (((x) < (a)) ? (a) : ((x) > (b)) ? (b) : (x))

@@ -172,16 +172,17 @@ static void window_draw_colorcolumn(Win *win) {
 	int cc = win->view.colorcolumn;
 	if (cc <= 0)
 		return;
-	size_t lineno = 0;
-	int line_cols = 0; /* Track the number of columns we've passed on each line */
+	s32  width       = win->view.width;
+	u32  line_number = 0;
+	s32  line_cols   = 0; /* Track the number of columns we've passed on each line */
 	bool line_cc_set = false; /* Has the colorcolumn attribute been set for this line yet */
-	int width = win->view.width;
 
-	for (Line *l = win->view.topline; l; l = l->next) {
-		if (l->lineno != lineno) {
+	for (s32 l = 0; l < win->view.height; l++) {
+		if (win->view.lines[l].line_number != line_number) {
 			line_cols = 0;
 			line_cc_set = false;
-			if (!(lineno = l->lineno))
+			line_number = win->view.lines[l].line_number;
+			if (line_number == 0)
 				break;
 		}
 		if (line_cc_set)
@@ -189,8 +190,8 @@ static void window_draw_colorcolumn(Win *win) {
 
 		/* This screen line contains the cell we want to highlight */
 		if (cc <= line_cols + width) {
-			VisCell *cell = l->cells + cc - 1 - line_cols;
-			cell->style = vis_cell_style_merge(cell->style, win->vis->ui.styles[UI_STYLE_COLOR_COLUMN]);
+			VisCellStyle *style = win->view.cell_styles + l * width + cc - 1 - line_cols;
+			*style = vis_cell_style_merge(*style, win->vis->ui.styles[UI_STYLE_COLOR_COLUMN]);
 			line_cc_set = true;
 		} else {
 			line_cols += width;
@@ -208,14 +209,15 @@ static void window_draw_cursorline(Win *win) {
 	if (win->view.selection_count > 1)
 		return;
 
-	int width = win->view.width;
 	Selection *sel = view_selections_primary_get(&win->view);
-	size_t lineno = sel->line->lineno;
-	for (Line *l = win->view.topline; l; l = l->next) {
-		if (l->lineno == lineno) {
-			for (int x = 0; x < width; x++)
-				l->cells[x].style = vis_cell_style_merge(l->cells[x].style, vis->ui.styles[UI_STYLE_CURSOR_LINE]);
-		} else if (l->lineno > lineno) {
+	u32 line_number = sel->line->line_number;
+	s32 width       = win->view.width;
+	for (s32 l = 0; l < win->view.height; l++) {
+		if (win->view.lines[l].line_number == line_number) {
+			VisCellStyle *styles = win->view.cell_styles + l * width;
+			for (s32 x = 0; x < width; x++)
+				styles[x] = vis_cell_style_merge(styles[x], vis->ui.styles[UI_STYLE_CURSOR_LINE]);
+		} else if (win->view.lines[l].line_number > line_number) {
 			break;
 		}
 	}
@@ -226,54 +228,55 @@ static void window_draw_selection(Win *win, Selection *cur) {
 	Filerange sel = view_selections_get(cur);
 	if (!text_range_valid(sel))
 		return;
-	Line *start_line; int start_col;
-	Line *end_line; int end_col;
-	view_coord_get(view, sel.start, &start_line, NULL, &start_col);
-	view_coord_get(view, sel.end, &end_line, NULL, &end_col);
-	if (!start_line && !end_line)
+
+	s32 start_line, start_col;
+	s32 end_line, end_col;
+	bool start_valid = view_coord_get(view, sel.start, 0, &start_line, &start_col);
+	bool end_valid   = view_coord_get(view, sel.end,   0, &end_line,   &end_col);
+	if (!start_valid && !end_valid)
 		return;
-	if (!start_line) {
-		start_line = view->topline;
-		start_col = 0;
+
+	if (!start_valid) start_line = start_col = 0;
+	if (!end_valid) {
+		end_line = vis_view_line_index(view, view->lastline);
+		end_col  = view->lastline->width;
 	}
-	if (!end_line) {
-		end_line = view->lastline;
-		end_col = end_line->width;
-	}
-	for (Line *l = start_line; l != end_line->next; l = l->next) {
-		int col = (l == start_line) ? start_col : 0;
-		int end = (l == end_line) ? end_col : l->width;
+
+	for (s32 l = start_line; l <= end_line; l++) {
+		s32 col = (l == start_line) ? start_col : 0;
+		s32 end = (l == end_line)   ? end_col   : view->lines[l].width;
 		while (col < end) {
-			VisCell *cell = l->cells + col++;
-			cell->style = vis_cell_style_merge(cell->style, win->vis->ui.styles[UI_STYLE_SELECTION]);
+			VisCellStyle *style = view->cell_styles + l * view->width + col++;
+			*style = vis_cell_style_merge(*style, win->vis->ui.styles[UI_STYLE_SELECTION]);
 		}
 	}
 }
 
-static void window_draw_cursor_matching(Win *win, Selection *cur) {
-	if (win->vis->mode->visual)
-		return;
-	Line *line_match; int col_match;
-	size_t pos = view_cursors_pos(cur);
-	Filerange limits = VIEW_VIEWPORT_GET(win->view);
-	size_t pos_match = text_bracket_match_symbol(win->file->text, pos, "(){}[]\"'`", limits);
-	if (pos == pos_match)
-		return;
-	if (!view_coord_get(&win->view, pos_match, &line_match, NULL, &col_match))
-		return;
-	line_match->cells[col_match].style = vis_cell_style_merge(line_match->cells[col_match].style,
-	                                                          win->vis->ui.styles[UI_STYLE_SELECTION]);
+VIS_INTERNAL void
+window_draw_cursor_matching(Win *win, Selection *cur)
+{
+	if (!win->vis->mode->visual) {
+		Filerange limits = VIEW_VIEWPORT_GET(win->view);
+		size_t pos       = view_cursors_pos(cur);
+		size_t pos_match = text_bracket_match_symbol(win->file->text, pos, "(){}[]\"'`", limits);
+
+		s32 line_index, column_index;
+		if (pos!= pos_match && view_coord_get(&win->view, pos_match, 0, &line_index, &column_index)) {
+			VisCellStyle *style = win->view.cell_styles + line_index * win->view.width + column_index;
+			*style = vis_cell_style_merge(*style, win->vis->ui.styles[UI_STYLE_SELECTION]);
+		}
+	}
 }
 
 static void window_draw_cursor(Win *win, Selection *cur) {
 	if (win->vis->win != win)
 		return;
-	Line *line = cur->line;
-	if (line) {
+	if (cur->line) {
+		s32 line_index = vis_view_line_index(&win->view, cur->line);
 		Selection *primary = view_selections_primary_get(&win->view);
 		u16 style_id = primary == cur ? UI_STYLE_CURSOR_PRIMARY : UI_STYLE_CURSOR;
-		VisCell *cell = line->cells + cur->col;
-		cell->style = vis_cell_style_merge(cell->style, win->vis->ui.styles[style_id]);
+		VisCellStyle *style = win->view.cell_styles + line_index * win->view.width + cur->col;
+		*style = vis_cell_style_merge(*style, win->vis->ui.styles[style_id]);
 		window_draw_cursor_matching(win, cur);
 	}
 }
@@ -303,12 +306,14 @@ VIS_INTERNAL void
 window_draw_eof(Win *win)
 {
 	View *view = &win->view;
-	VisCell cell = {.width = 1};
-	cell.style = vis_cell_style_merge(win->vis->ui.styles[UI_STYLE_DEFAULT], win->vis->ui.styles[UI_STYLE_EOF]);
+	VisCellStyle style = vis_cell_style_merge(win->vis->ui.styles[UI_STYLE_DEFAULT], win->vis->ui.styles[UI_STYLE_EOF]);
+	VisCellData  cell  = {.width = 1};
 	cell.data_length = Min(view->symbols[SYNTAX_SYMBOL_EOF].length, countof(cell.data));
 	memory_copy(cell.data, view->symbols[SYNTAX_SYMBOL_EOF].data, cell.data_length);
-	for (Line *l = view->lastline->next; l; l = l->next)
-		l->cells[0] = cell;
+	for (s32 l = vis_view_line_index(view, view->lastline) + 1; l < view->height; l++) {
+		view->cell_data[l * view->width + 0]   = cell;
+		view->cell_styles[l * view->width + 0] = style;
+	}
 }
 
 void vis_window_draw(Win *win) {
@@ -826,20 +831,31 @@ void vis_do(Vis *vis) {
 			size_t start = pos;
 			for (int i = 0; i < count; i++) {
 				size_t pos_prev = pos;
-				if (a->movement->txt)
-					pos = a->movement->txt(txt, pos);
-				else if (a->movement->cur)
-					pos = a->movement->cur(sel);
-				else if (a->movement->file)
-					pos = a->movement->file(vis, file, sel);
-				else if (a->movement->vis)
-					pos = a->movement->vis(vis, txt, pos);
-				else if (a->movement->view)
-					pos = a->movement->view(vis, view);
-				else if (a->movement->win)
-					pos = a->movement->win(vis, win, pos);
-				else if (a->movement->user)
-					pos = a->movement->user(vis, win, a->movement->data, pos);
+				switch (a->movement->kind) {
+				case MOVE_KIND_TXT:
+					pos = a->movement->u.txt(txt, pos);
+					break;
+				case MOVE_KIND_CUR:
+					pos = a->movement->u.cur(sel);
+					break;
+				case MOVE_KIND_FILE:
+					pos = a->movement->u.file(vis, file, sel);
+					break;
+				case MOVE_KIND_VIS:
+					pos = a->movement->u.vis(vis, txt, pos);
+					break;
+				case MOVE_KIND_VIEW:
+					pos = a->movement->u.view(vis, view);
+					break;
+				case MOVE_KIND_WIN:
+					pos = a->movement->u.win(vis, win, pos);
+					break;
+				case MOVE_KIND_USER:
+					pos = a->movement->u.user(vis, win, a->movement->data, pos);
+					break;
+				case MOVE_KIND_NONE:
+					break;
+				}
 				if (pos == EPOS || a->movement->type & IDEMPOTENT || pos == pos_prev) {
 					err = a->movement->type & COUNT_EXACT;
 					break;

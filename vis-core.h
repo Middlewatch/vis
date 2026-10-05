@@ -75,14 +75,25 @@ typedef struct {
 } Operator;
 
 typedef struct { /* Motion implementation, takes a cursor position and returns a new one */
-	/* TODO: merge types / use union to save space */
-	size_t (*cur)(Selection*);
-	size_t (*txt)(Text*, size_t pos);
-	size_t (*file)(Vis*, File*, Selection*);
-	size_t (*vis)(Vis*, Text*, size_t pos);
-	size_t (*view)(Vis*, View*);
-	size_t (*win)(Vis*, Win*, size_t pos);
-	size_t (*user)(Vis*, Win*, void*, size_t pos);
+	union {
+		size_t (*cur)(Selection*);
+		size_t (*txt)(Text*, size_t pos);
+		size_t (*file)(Vis*, File*, Selection*);
+		size_t (*vis)(Vis*, Text*, size_t pos);
+		size_t (*view)(Vis*, View*);
+		size_t (*win)(Vis*, Win*, size_t pos);
+		size_t (*user)(Vis*, Win*, void*, size_t pos);
+	} u;
+	enum {
+		MOVE_KIND_NONE,
+		MOVE_KIND_CUR,
+		MOVE_KIND_TXT,
+		MOVE_KIND_FILE,
+		MOVE_KIND_VIS,
+		MOVE_KIND_VIEW,
+		MOVE_KIND_WIN,
+		MOVE_KIND_USER
+	} kind;
 	enum {
 		LINEWISE  = VIS_MOTIONTYPE_LINEWISE,  /* should the covered range be extended to whole lines? */
 		CHARWISE  = VIS_MOTIONTYPE_CHARWISE,  /* scrolls window content until position is visible */
@@ -295,12 +306,12 @@ typedef MarkDef RegisterDef;
 
 /** stuff used by several of the vis-* files */
 
-extern Mode vis_modes[VIS_MODE_INVALID];
-extern const Movement vis_motions[VIS_MOVE_INVALID];
-extern const Operator vis_operators[VIS_OP_INVALID];
-extern const TextObject vis_textobjects[VIS_TEXTOBJECT_INVALID];
-extern const MarkDef vis_marks[VIS_MARK_a];
-extern const RegisterDef vis_registers[VIS_REG_a];
+static    Mode        vis_modes[VIS_MODE_INVALID];
+read_only Movement    vis_motions[VIS_MOVE_INVALID];
+read_only Operator    vis_operators[VIS_OP_INVALID];
+read_only TextObject  vis_textobjects[VIS_TEXTOBJECT_INVALID];
+read_only MarkDef     vis_marks[VIS_MARK_a];
+read_only RegisterDef vis_registers[VIS_REG_a];
 
 VIS_INTERNAL void macro_operator_stop(Vis *vis);
 VIS_INTERNAL void macro_operator_record(Vis *vis);

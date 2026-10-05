@@ -24,14 +24,11 @@ typedef struct {
 	VisDACount       capacity;
 } SelectionRegionList;
 
-typedef struct Line Line;
-struct Line {               /* a line on the screen, *not* in the file */
-	Line *prev, *next;  /* pointer to neighbouring screen lines */
-	size_t len;         /* line length in terms of bytes */
-	size_t lineno;      /* line number from start of file */
-	int width;          /* zero based position of last used column cell */
-	VisCell cells[];    /* view->width cells storing information about the displayed characters */
-};
+typedef struct {
+	u32 file_byte_count; /* line length in terms of bytes */
+	u32 line_number;     /* line number from start of file */
+	u32 width;           /* zero based position of last used column cell */
+} Line; /* a line on the screen, *not* in the file */
 
 struct View;
 typedef struct Selection {
@@ -50,16 +47,21 @@ typedef struct Selection {
 
 typedef struct View {
 	Text *text;         /* underlying text management */
-	char *textbuf;      /* scratch buffer used for drawing */
 	int width, height;  /* size of display area */
 	size_t start, end;  /* currently displayed area [start, end] in bytes from the start of the file */
 	size_t start_last;  /* previously used start of visible area, used to update the mark */
 	Mark start_mark;    /* mark to keep track of the start of the visible area */
-	size_t lines_size;  /* number of allocated bytes for lines (grows only) */
+
+	u64   buffer_size;  /* number of allocated bytes for line/cell data */
+	void *buffer;       /* base address of line/cell data */
+
+	char         *text_buffer; /* scratch buffer used for drawing */
+	VisCellData  *cell_data;
+	VisCellStyle *cell_styles;
+
 	Line *lines;        /* view->height number of lines representing view content */
-	Line *topline;      /* top of the view, first line currently shown */
-	Line *lastline;     /* last currently used line, always <= bottomline */
-	Line *bottomline;   /* bottom of view, might be unused if lastline < bottomline */
+	Line *lastline;     /* last currently used line */
+
 	Selection *selection;    /* primary selection, always placed within the visible viewport */
 	Selection *selection_latest; /* most recently created cursor */
 	Selection *selection_dead;   /* primary cursor which was disposed, will be removed when another cursor is created */
@@ -128,7 +130,7 @@ VIS_INTERNAL void   view_redraw_bottom(View*);
  * @defgroup view_size View Sizing
  * @{
  */
-VIS_INTERNAL bool view_resize(View*, int width, int height);
+VIS_INTERNAL bool vis_view_resize(View*, int width, int height);
 /**
  * @}
  * @defgroup view_draw View Drawing
