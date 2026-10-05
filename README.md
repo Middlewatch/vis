@@ -1,16 +1,9 @@
 # Vis - Combining Modal Editing with Structural Regular Expressions
 
-> **About this fork.** This is Middlewatch's personal fork of
-> [martanne/vis](https://github.com/martanne/vis), a lab for mouse-native
-> editing on vis's modal core: click, drag, wheel and chords with the hit
-> test in the editor rather than a plugin, plus a status line, leader
-> hints and as-you-type completion in Lua. It tracks upstream master and
-> is built for the owner's own machines; the API and defaults change
-> without notice and there are no releases or support. `bin/install`
-> builds it and installs under `~/.local`. See
-> [`README.mouse.md`](README.mouse.md) for the fork's features and
-> [`doc/ROADMAP.md`](doc/ROADMAP.md) for what it is building and why.
-> Everything below is upstream's README.
+**About this fork.** This is my personal fork of [martanne/vis](https://github.com/martanne/vis), 
+The primary purpose was to include mouse native movements and some experimental chording 
+(stealing some functionality from acme) as well as an overlay feature so that I can include a handful of 
+my favorite qol features from neovim. 
 
 [![Development discussion](https://img.shields.io/badge/email-~martanne%2Fdevel-black?logo=sourcehut)](https://lists.sr.ht/~martanne/devel)
 [![builds.sr.ht status](https://builds.sr.ht/~martanne/vis/commits.svg)](https://builds.sr.ht/~martanne/vis/commits?)
