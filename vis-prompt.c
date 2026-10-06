@@ -154,12 +154,27 @@ VIS_EXPORT void
 vis_prompt_show(Vis *vis, const char *title)
 {
 	Win *active_window = vis->win;
-	Win *prompt        = active_window;
+	Win *prompt        = NULL;
 
-	if (vis->prompt_state != PROMPTSTATE_ONELINE)
-		prompt = window_new_file(vis, vis->prompt_file, UI_OPTION_ONELINE);
+	/* An open prompt may have lost focus (a mouse click on another window
+	 * moves vis->win without closing it). Look the prompt window up by its
+	 * file instead of trusting the active window to be it. */
+	if (vis->prompt_state == PROMPTSTATE_ONELINE) {
+		for (Win *win = vis->windows; win; win = win->next) {
+			if (win->file == vis->prompt_file) {
+				prompt = win;
+				break;
+			}
+		}
+	}
 
-	if (prompt && prompt != active_window) {
+	bool created = false;
+	if (!prompt) {
+		prompt  = window_new_file(vis, vis->prompt_file, UI_OPTION_ONELINE);
+		created = true;
+	}
+
+	if (prompt && created) {
 		prompt->parent      = active_window;
 		prompt->parent_mode = vis->mode;
 		vis_window_mode_map(prompt, VIS_MODE_NORMAL, true, "<Enter>",  &prompt_enter_binding);
