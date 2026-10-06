@@ -3,7 +3,16 @@
 **About this fork.** This is my personal fork of [martanne/vis](https://github.com/martanne/vis), 
 The primary purpose was to include mouse native movements and some experimental chording 
 (stealing some functionality from acme) as well as an overlay feature so that I can include a handful of 
-my favorite qol features from neovim. 
+my favorite qol features from neovim.
+
+reminder for myself
+
+```
+install gcc make lua-devel ncurses-devel lua-lpeg   
+git clone https://github.com/Middlewatch/vis ~/projects/vis   
+cd ~/projects/vis
+bin/install            
+```
 
 [![Development discussion](https://img.shields.io/badge/email-~martanne%2Fdevel-black?logo=sourcehut)](https://lists.sr.ht/~martanne/devel)
 [![builds.sr.ht status](https://builds.sr.ht/~martanne/vis/commits.svg)](https://builds.sr.ht/~martanne/vis/commits?)
