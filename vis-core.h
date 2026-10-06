@@ -327,6 +327,8 @@ VIS_INTERNAL Macro *macro_get(Vis *vis, enum VisRegister);
 VIS_INTERNAL Win *window_new_file(Vis*, File*, enum UiOption);
 VIS_INTERNAL void window_selection_save(Win *win);
 VIS_INTERNAL void window_status_update(Vis *vis, Win *win);
+/* abandon the prompt window when focus moves off it (vis-prompt.c) */
+VIS_INTERNAL void vis_prompt_leave(Vis *vis);
 
 VIS_INTERNAL const char *register_get(Vis*, Register*, s64 *length);
 VIS_INTERNAL const char *register_slot_get(Vis*, Register*, size_t slot, s64 *length);

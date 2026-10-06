@@ -342,6 +342,8 @@ void vis_window_invalidate(Win *win) {
 VIS_EXPORT void
 vis_window_focus(Vis *vis, Win *new)
 {
+	if (vis->win && new != vis->win)
+		vis_prompt_leave(vis); /* closes an open prompt, may change vis->win */
 	if (vis->win) vis->win->view.need_update = true;
 	new->view.need_update = true;
 	vis->win = new;

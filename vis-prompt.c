@@ -103,6 +103,16 @@ vis_prompt_enter(Vis *vis, const char *keys, const Arg *arg)
 	return keys;
 }
 
+VIS_INTERNAL void vis_prompt_leave(Vis *vis) {
+	Win *prompt = vis->win;
+	if (vis->prompt_state != PROMPTSTATE_ONELINE || !prompt || prompt->file != vis->prompt_file)
+		return;
+	/* focus moved away from the prompt: abandon it as <Escape> would,
+	 * restoring the mode that was active before it opened */
+	vis->mode = prompt->parent_mode;
+	vis_prompt_hide(prompt);
+}
+
 static const char *prompt_esc(Vis *vis, const char *keys, const Arg *arg) {
 	Win *prompt = vis->win;
 	if (prompt->view.selection_count > 1) {
