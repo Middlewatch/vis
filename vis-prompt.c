@@ -96,8 +96,13 @@ vis_prompt_enter(Vis *vis, const char *keys, const Arg *arg)
 			text_appendf(vis, txt, "%s\n", cmd);
 		}
 	} else {
-		vis->win  = prompt;
-		vis->mode = vis_modes + VIS_MODE_INSERT;
+		/* the command failed: the prompt stays open for correction, so it
+		 * is a one-line prompt again. Leaving the state at COMMAND hid it
+		 * from vis_prompt_leave and vis_prompt_show, and a focus change
+		 * followed by ':' stacked a second window on the prompt file. */
+		vis->win          = prompt;
+		vis->mode         = vis_modes + VIS_MODE_INSERT;
+		vis->prompt_state = PROMPTSTATE_ONELINE;
 	}
 	free(cmd);
 	return keys;

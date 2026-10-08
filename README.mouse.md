@@ -287,7 +287,8 @@ Defaults, in `lua/vis-mouse.lua`:
 - Wheel scrolls (`<C-y>` / `<C-e>`).
 - Click moves the cursor and focuses the window under the pointer. A
   click outside the selection ends VISUAL; INSERT and REPLACE continue
-  at the new position. The wheel scrolls the window under the pointer,
+  at the new position. A click off the open `:` prompt abandons it as
+  `Escape` would, also after a failed command. The wheel scrolls the window under the pointer,
   focusing it.
 - Drag selects (VISUAL) and stays in the window it started in. Release
   copies to the X PRIMARY selection via `vis-clipboard`.
