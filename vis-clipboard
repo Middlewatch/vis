@@ -18,6 +18,8 @@ Options:
     --paste      paste text to standard output
     --usable     silently exit with a status code indicating if a supported
                  clipboard implementation was found
+    --backend    print the name of the clipboard implementation that would be
+                 used (wlclipboard, xclip, osc52, ...) and exit 0, or exit 1
     --selection  take input from sel. valid options: clipboard, primary"
 }
 
@@ -80,6 +82,14 @@ vc_determine_command() {
 
 vc_usable() {
 	if vc_determine_command >/dev/null 2>&1; then
+		exit 0
+	fi
+
+	exit 1
+}
+
+vc_backend() {
+	if vc_determine_command; then
 		exit 0
 	fi
 
@@ -218,6 +228,7 @@ vc_osc52_paste() {
 while [ $# -gt 0 ]; do
 	case "$1" in
 		--usable) fn=vc_usable;;
+		--backend) fn=vc_backend;;
 		--copy) fn=vc_copy;;
 		--paste) fn=vc_paste;;
 		--selection)
