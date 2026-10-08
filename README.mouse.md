@@ -14,15 +14,31 @@ used to format them as key strings and push them into the input queue.
 Now `getkey()` in `vis.c` turns a `TERMKEY_TYPE_MOUSE` key into a
 `VIS_EVENT_MOUSE` and the Lua side receives it as `vis.events.MOUSE`:
 
-    mouse(type, button, line, col)
+    mouse(type, button, line, col, time)
 
     type    1 press, 2 drag, 3 release, 0 unknown (termkey's enum)
     button  1 left, 2 middle, 3 right, 4 wheel up, 5 wheel down, 0 none
     line    1-based terminal row
     col     1-based terminal column
+    time    arrival in milliseconds on a monotonic clock
 
 Motion with no button held arrives as `type == 3, button == 0`; that is
-how termkey reports it.
+how termkey reports it. Horizontal wheel ticks come through termkey as
+unknown and are dropped. `time` exists because vis has no timer and Lua's
+`os.time()` counts seconds: it is what makes a double click a matter of
+milliseconds rather than "the same cell as last time".
+
+`win:scroll(n)` slides any window's view by `n` lines, positive towards
+the end of the file like `<C-e>`, without touching focus; it is what the
+wheel uses, so wheeling over a split or over the file while a `:` prompt
+is open changes neither focus nor the prompt.
+
+Two UI events bracket the moments vis hands the terminal to someone else:
+`vis.events.UI_SUSPEND` fires before `^Z` stops the editor (the terminal
+generates SIGTSTP itself under `cbreak()`, so vis catches the signal, runs
+the event, then stops for real) and before a fullscreen `vis:pipe`;
+`UI_RESUME` fires when vis has the terminal back. `vis-mouse` turns
+tracking off and on at those points so the shell never sees motion reports.
 
 The hit test lives in C too. `vis:win_at(line, col)` takes the same
 1-based terminal cell and returns the window under it, the file position
@@ -284,16 +300,25 @@ Add to `visrc.lua`:
 
 Defaults, in `lua/vis-mouse.lua`:
 
-- Wheel scrolls (`<C-y>` / `<C-e>`).
-- Click moves the cursor and focuses the window under the pointer. A
-  click outside the selection ends VISUAL; INSERT and REPLACE continue
-  at the new position. A click off the open `:` prompt abandons it as
-  `Escape` would, also after a failed command. The wheel scrolls the window under the pointer,
-  focusing it.
-- Drag selects (VISUAL) and stays in the window it started in. Release
-  copies to the X PRIMARY selection via `vis-clipboard`.
-- Double click selects the WORD under the pointer, or the whole line
-  when the click lands on a newline or in the line-number sidebar.
+- Wheel scrolls the window under the pointer by `mouse.wheel_lines`
+  (1) without moving focus; it works in every mode, INSERT included.
+- Left click moves the cursor and focuses the window under the pointer.
+  It ends any selection; INSERT and REPLACE continue at the new
+  position. A click off the open `:` prompt abandons it as `Escape`
+  would, also after a failed command.
+- Drag selects (VISUAL) and stays in the window it started in; a drag
+  that begins on a status bar selects nothing. Release copies to the
+  primary selection via `vis-clipboard` when `mouse.copy_on_select` is
+  on. It defaults from `vis-clipboard --backend`: on with a Wayland or
+  X primary, off under OSC 52, where primary and clipboard are the same
+  thing and tmux keeps a paste buffer of every write besides. Set it to
+  `true` or `false` in `visrc.lua` to decide yourself.
+- Double click (two presses on one cell within `mouse.double_click_ms`,
+  400) selects the WORD under the pointer, or the whole line when it
+  lands on a newline or in the line-number sidebar. It copies nothing;
+  a third press is a single click again.
+- Middle click moves the cursor there and inserts the primary
+  selection. Right click on its own does nothing.
 - Chords: right click while dragging copies to the clipboard; middle
   click while dragging inserts the clipboard.
 - `:set mouse off` stops tracking.
@@ -306,6 +331,8 @@ check.
 ## Known limits
 
 Splits: a drag that leaves its window is ignored rather than clamped.
+A click on the prompt line itself does nothing; the prompt is reached
+with `:` and left with `Escape`, `Enter` or a click elsewhere.
 The ghost cursor needs a redraw to move, so it lags motion over a window
 that has nothing else to redraw.
 

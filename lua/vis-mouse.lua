@@ -32,6 +32,7 @@ state.current = {
 	button = BUTTON.NONE,
 	line = 1,
 	col = 1,
+	time = 0, -- arrival time in ms (monotonic)
 	dragging = 0, -- button of in-progress dragging event
 	chordbase = 0, -- the first button clicked in a chord event
 }
@@ -61,6 +62,23 @@ local events = {
 mouse.events = events
 
 mouse.options = { mouse = true }
+
+-- two presses of one button on one cell within this many milliseconds
+-- are a double click; later ones are single clicks again
+mouse.double_click_ms = 400
+
+-- lines scrolled per wheel tick
+mouse.wheel_lines = 1
+
+-- write a drag selection to the primary selection on release. nil: decide
+-- on START from the clipboard backend: on with a Wayland or X primary,
+-- off under OSC 52, where primary and clipboard are one and tmux keeps a
+-- paste buffer of every write besides
+mouse.copy_on_select = nil
+
+-- file position of the last press, nil when it hit no text (status bar,
+-- overlay, prompt): a drag from there selects nothing
+state.press_pos = nil
 
 -- resolve the terminal cell under the mouse: window, file position (nil on
 -- the status bar) and which part of the window was hit ("text", "sidebar"
@@ -106,7 +124,20 @@ function mouse.activate()
 	io.flush()
 end
 
-vis.events.subscribe(vis.events.START, mouse.activate)
+vis.events.subscribe(vis.events.START, function()
+	mouse.activate()
+	if mouse.copy_on_select == nil then
+		local status, backend = vis:pipe("vis-clipboard --backend")
+		mouse.copy_on_select = status == 0 and not backend:match("^osc52")
+	end
+end)
+
+-- hand the terminal over clean: no motion reports into the shell under
+-- <C-z> or a fullscreen program, tracking back when vis returns
+vis.events.subscribe(vis.events.UI_SUSPEND, function() mouse.deactivate() end)
+vis.events.subscribe(vis.events.UI_RESUME, function()
+	if mouse.options.mouse then mouse.activate() end
+end)
 
 -- deactivate mouse detection
 function mouse.deactivate()
@@ -118,17 +149,19 @@ end
 vis.events.subscribe(vis.events.QUIT, mouse.deactivate)
 
 -- set mouse.state appropriately and emit vis events for common operations
-local function update_mouse_state(event, button, line, col)
+local function update_mouse_state(event, button, line, col, time)
 	state.last = state.current
 	state.current = {}
 	state.current.event = event
 	state.current.button = button
 	state.current.line = line
 	state.current.col = col
+	state.current.time = time or 0
 	state.current.dragging = state.last.dragging
 	state.current.chordbase = state.last.chordbase
 
 	if (event == MOUSE_EVENT.PRESSED) then
+		state.press_pos = nil
 		-- wheel movements don't produce release events
 		if (button ~= BUTTON.WHEELUP
 			and button ~= BUTTON.WHEELDOWN) then
@@ -138,9 +171,11 @@ local function update_mouse_state(event, button, line, col)
 			end
 		end
 
-		if (state.lastclick.button == button
+		local double = state.lastclick.button == button
 			and state.lastclick.col == col
-			and state.lastclick.line == line) then
+			and state.lastclick.line == line
+			and state.current.time - (state.lastclick.time or 0) <= mouse.double_click_ms
+		if double then
 			vis.events.emit(events.DOUBLE_CLICK, state)
 		elseif (state.current.chordbase ~= button
 			and button ~= BUTTON.WHEELUP
@@ -150,10 +185,11 @@ local function update_mouse_state(event, button, line, col)
 			vis.events.emit(events.PRESS, state)
 		end
 
-		-- After executing appropriate action
+		-- After executing appropriate action. A double click does not seed
+		-- another one: the third press on the cell is a single click.
 		if (button ~= BUTTON.WHEELUP
 			and button ~= BUTTON.WHEELDOWN) then
-			state.lastclick = state.current
+			state.lastclick = double and { button = 0, line = 0, col = 0, time = 0 } or state.current
 		end
 	elseif (event == MOUSE_EVENT.DRAGGED) then
 		state.current.dragging = button
@@ -185,6 +221,7 @@ function mouse.double_click(ms)
 		return
 	end
 	if not guessedpos then return end
+	state.press_pos = guessedpos
 	local charatpos = win.file:content(guessedpos, 1)
 
 	if (where == "sidebar" or charatpos == "\n") then
@@ -206,16 +243,20 @@ end
 
 -- perform actions for single clicks
 function mouse.single_click(ms)
-	-- wheel motions don't create release events and aren't clicks
-	if (ms.current.button == BUTTON.WHEELUP) then
-		focus_resolve(ms.current)
-		vis:feedkeys("<C-y>")
-		return
-	elseif (ms.current.button == BUTTON.WHEELDOWN) then
-		focus_resolve(ms.current)
-		vis:feedkeys("<C-e>")
+	local button = ms.current.button
+
+	-- the wheel scrolls the window under the pointer and leaves focus (and
+	-- an open prompt) alone; it creates no release events and is no click
+	if (button == BUTTON.WHEELUP or button == BUTTON.WHEELDOWN) then
+		local win = mouse.resolve(ms.current)
+		if win then
+			win:scroll(button == BUTTON.WHEELDOWN and mouse.wheel_lines or -mouse.wheel_lines)
+		end
 		return
 	end
+
+	-- a right click on its own does nothing (the left+right chord copies)
+	if (button == BUTTON.RIGHT) then return end
 
 	local _, gpos, where, row = focus_resolve(ms.current)
 	if where == "overlay" then
@@ -223,28 +264,29 @@ function mouse.single_click(ms)
 		return
 	end
 	if not gpos then return end
-	local currange = vis.win.selection.range
+	state.press_pos = gpos
 
-	-- a click outside the selection drops it; a visual mode ends, but
+	-- a plain click ends any selection and puts the cursor where it landed;
 	-- INSERT and REPLACE keep going at the new position
-	if (gpos < currange.start or gpos > currange.finish) then
-		vis.win.selection.anchored = false
-		if (vis.mode == vis.modes.VISUAL or vis.mode == vis.modes.VISUAL_LINE) then
-			vis.mode = vis.modes.NORMAL
-		end
+	vis.win.selection.anchored = false
+	if (vis.mode == vis.modes.VISUAL or vis.mode == vis.modes.VISUAL_LINE) then
+		vis.mode = vis.modes.NORMAL
 	end
-
 	vis.win.selection.pos = gpos
 
-	-- ensure visual line acts as expected
-	if (vis.mode == vis.modes.VISUAL_LINE) then
-		vis:feedkeys("0$")
+	-- middle click pastes the primary selection at the pointer
+	if (button == BUTTON.MIDDLE) then
+		local status, paste = vis:pipe("vis-clipboard --paste --selection primary")
+		if status == 0 and paste and #paste > 0 then
+			vis:insert(paste)
+		end
 	end
 end
 
 -- perform actions for when the mouse is moved with at least one button held down
 function mouse.dragged(ms)
-	-- a drag stays in the window it started in
+	-- a drag stays in the window it started in and needs a press on text
+	if not state.press_pos then return end
 	local win, pos = mouse.resolve(ms.current)
 	if win ~= vis.win or not pos then return end
 	if (vis.win.selection.anchored == false) then
@@ -272,7 +314,9 @@ function mouse.release(ms)
 	local selection = vis.win.selection
 	local file = vis.win.file
 
-	if (action == BUTTON.LEFT and selection.anchored) then
+	-- only a drag copies, and only where primary is a selection of its own
+	if (mouse.copy_on_select and action == BUTTON.LEFT
+		and ms.current.dragging == BUTTON.LEFT and selection.anchored) then
 		vis:pipe(file, selection.range, "vis-clipboard --copy --selection primary")
 	end
 end
