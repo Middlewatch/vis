@@ -235,6 +235,7 @@ struct Vis {
 	volatile sig_atomic_t sigbus;        /* one of the memory mapped regions became unavailable (SIGBUS) */
 	volatile sig_atomic_t need_resize;   /* need to resize UI (SIGWINCH occurred) */
 	volatile sig_atomic_t resume;        /* need to resume UI (SIGCONT occurred) */
+	volatile sig_atomic_t suspend;       /* need to suspend (SIGTSTP occurred, the terminal's ^Z) */
 	volatile sig_atomic_t terminate;     /* need to terminate we were being killed by SIGTERM */
 	Map *actions;                        /* registered editor actions / special keys commands */
 
@@ -290,6 +291,8 @@ enum VisEvents {
 	VIS_EVENT_WIN_STATUS,
 	VIS_EVENT_TERM_CSI,
 	VIS_EVENT_UI_DRAW,
+	VIS_EVENT_UI_SUSPEND, /* the terminal is handed to another process (<C-z>, fullscreen pipe) */
+	VIS_EVENT_UI_RESUME,  /* vis owns the terminal again */
 	VIS_EVENT_MOUSE, /* see README.mouse.md */
 	VIS_EVENT_TEXT_CHANGED, /* see text_on_change() */
 	VIS_EVENT_KEYS_PENDING, /* see vis_keys_pending() */
@@ -329,6 +332,8 @@ VIS_INTERNAL void window_selection_save(Win *win);
 VIS_INTERNAL void window_status_update(Vis *vis, Win *win);
 /* abandon the prompt window when focus moves off it (vis-prompt.c) */
 VIS_INTERNAL void vis_prompt_leave(Vis *vis);
+/* announce UI_SUSPEND, then stop the process until SIGCONT (vis.c) */
+VIS_INTERNAL void vis_suspend(Vis *vis);
 
 VIS_INTERNAL const char *register_get(Vis*, Register*, s64 *length);
 VIS_INTERNAL const char *register_slot_get(Vis*, Register*, size_t slot, s64 *length);

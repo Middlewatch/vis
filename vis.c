@@ -1336,6 +1336,9 @@ static const char *getkey(Vis *vis) {
 		UiMouseEvent event;
 		if (termkey_interpret_mouse(termkey, &key, &type, &event.button, &event.line, &event.col) == TERMKEY_RES_KEY) {
 			event.type = type;
+			struct timespec now;
+			clock_gettime(CLOCK_MONOTONIC, &now);
+			event.time_ms = (s64)now.tv_sec * 1000 + now.tv_nsec / 1000000;
 			vis_event_emit(vis, VIS_EVENT_MOUSE, &event);
 		}
 		return getkey(vis);
@@ -1358,6 +1361,9 @@ bool vis_signal_handler(Vis *vis, int signum, const siginfo_t *siginfo, const vo
 	case SIGINT:
 		vis->interrupted = true;
 		return true;
+	case SIGTSTP:
+		vis->suspend = true;
+		return true;
 	case SIGCONT:
 		vis->resume = true;
 		/* fall through */
@@ -1370,6 +1376,14 @@ bool vis_signal_handler(Vis *vis, int signum, const siginfo_t *siginfo, const vo
 		return true;
 	}
 	return false;
+}
+
+/* With cbreak() the terminal turns ^Z into SIGTSTP itself, so the key
+ * binding only fires where that is disabled; both paths come through here
+ * so Lua can release the terminal (mouse tracking) before the shell gets it. */
+VIS_INTERNAL void vis_suspend(Vis *vis) {
+	vis_event_emit(vis, VIS_EVENT_UI_SUSPEND);
+	ui_terminal_suspend(&vis->ui);
 }
 
 int vis_run(Vis *vis) {
@@ -1428,9 +1442,15 @@ int vis_run(Vis *vis) {
 			continue;
 		}
 
+		if (vis->suspend) {
+			vis->suspend = false;
+			vis_suspend(vis);
+		}
+
 		if (vis->resume) {
 			ui_terminal_resume(&vis->ui);
 			vis->resume = false;
+			vis_event_emit(vis, VIS_EVENT_UI_RESUME);
 		}
 
 		if (vis->need_resize) {
@@ -1725,6 +1745,8 @@ static int _vis_pipe(Vis *vis, File *file, Filerange range, const char* buf, con
 		return -1;
 	}
 
+	if (fullscreen)
+		vis_event_emit(vis, VIS_EVENT_UI_SUSPEND);
 	ui_terminal_save(&vis->ui, fullscreen);
 	pid_t pid = fork();
 
@@ -1937,6 +1959,8 @@ err:
 
 	vis->interrupted = false;
 	ui_terminal_restore(&vis->ui);
+	if (fullscreen)
+		vis_event_emit(vis, VIS_EVENT_UI_RESUME);
 
 	if (WIFEXITED(status))
 		return WEXITSTATUS(status);

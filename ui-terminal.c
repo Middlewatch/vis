@@ -724,7 +724,18 @@ vis_ui_termkey_reopen(Ui *ui, int fd, char *term)
 
 void ui_terminal_suspend(Ui *tui) {
 	ui_term_backend_suspend(tui);
+	/* vis catches SIGTSTP to run vis_suspend first; our own stop must bypass
+	 * that handler and the block mask, or it would only set the flag again */
+	struct sigaction dfl = { .sa_handler = SIG_DFL }, old;
+	sigemptyset(&dfl.sa_mask);
+	sigaction(SIGTSTP, &dfl, &old);
+	sigset_t unblock, oldmask;
+	sigemptyset(&unblock);
+	sigaddset(&unblock, SIGTSTP);
+	sigprocmask(SIG_UNBLOCK, &unblock, &oldmask);
 	kill(0, SIGTSTP);
+	sigprocmask(SIG_SETMASK, &oldmask, NULL);
+	sigaction(SIGTSTP, &old, NULL);
 }
 
 VIS_INTERNAL bool

@@ -2414,6 +2414,24 @@ static int window_draw(lua_State *L) {
 }
 
 /***
+ * Scroll the window by whole lines, keeping its cursor on screen.
+ *
+ * Works on any window, focused or not, so a mouse wheel can scroll the
+ * window under the pointer without moving focus.
+ * @function scroll
+ * @tparam int lines positive moves the view down the file (like `<C-e>`), negative up
+ */
+static int window_scroll(lua_State *L) {
+	Win *win = obj_ref_check(L, 1, VIS_LUA_TYPE_WINDOW);
+	int lines = (int)luaL_checkinteger(L, 2);
+	if (lines > 0)
+		view_slide_up(&win->view, lines);
+	else if (lines < 0)
+		view_slide_down(&win->view, -lines);
+	return 0;
+}
+
+/***
  * Find the terminal cell showing a file position.
  *
  * The inverse of @{Vis:win_at}: `x` and `y` are 0-based terminal cells as
@@ -2478,6 +2496,7 @@ static const struct luaL_Reg window_funcs[] = {
 	{ "style_pos", vis_lua_window_style_pos },
 	{ "status", window_status },
 	{ "draw", window_draw },
+	{ "scroll", window_scroll },
 	{ "coord", window_coord },
 	{ "close", window_close },
 	{ NULL, NULL },
@@ -3986,6 +4005,7 @@ static void vis_lua_term_csi(Vis *vis, const long *csi) {
  * @tparam int button the button involved, 0 when unknown
  * @tparam int line 1-based terminal row
  * @tparam int col 1-based terminal column
+ * @tparam int time arrival time in milliseconds on a monotonic clock; only differences mean anything
  */
 static void vis_lua_mouse(Vis *vis, const UiMouseEvent *event) {
 	lua_State *L = vis->lua;
@@ -3995,7 +4015,8 @@ static void vis_lua_mouse(Vis *vis, const UiMouseEvent *event) {
 		lua_pushinteger(L, event->button);
 		lua_pushinteger(L, event->line);
 		lua_pushinteger(L, event->col);
-		pcall(vis, L, 4, 0);
+		lua_pushinteger(L, event->time_ms);
+		pcall(vis, L, 5, 0);
 	}
 	lua_pop(L, 1);
 }
@@ -4114,6 +4135,19 @@ static void vis_lua_ui_draw(Vis *vis) {
 	vis_lua_event_call(vis, "ui_draw");
 }
 
+/***
+ * The terminal is about to be handed to another process.
+ *
+ * Emitted before `<C-z>` suspends vis and before a fullscreen
+ * @{Vis:pipe} runs. Terminal modes vis enabled itself, such as mouse
+ * tracking, should be switched off here.
+ * @function ui_suspend
+ */
+/***
+ * vis owns the terminal again after @{ui_suspend}.
+ * @function ui_resume
+ */
+
 bool vis_event_emit(Vis *vis, enum VisEvents id, ...) {
 	va_list ap;
 	va_start(ap, id);
@@ -4174,6 +4208,12 @@ bool vis_event_emit(Vis *vis, enum VisEvents id, ...) {
 		break;
 	case VIS_EVENT_UI_DRAW:
 		vis_lua_ui_draw(vis);
+		break;
+	case VIS_EVENT_UI_SUSPEND:
+		vis_lua_event_call(vis, "ui_suspend");
+		break;
+	case VIS_EVENT_UI_RESUME:
+		vis_lua_event_call(vis, "ui_resume");
 		break;
 	case VIS_EVENT_MOUSE:
 		vis_lua_mouse(vis, va_arg(ap, const UiMouseEvent *));

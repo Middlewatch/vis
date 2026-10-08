@@ -160,6 +160,8 @@ local events = {
 	KEYS_PENDING = "Event::KEYS_PENDING", -- see @{keys_pending}
 	PROCESS_RESPONSE = "Event::PROCESS_RESPONSE", -- see @{process_response}
 	UI_DRAW = "Event::UI_DRAW", -- see @{ui_draw}
+	UI_SUSPEND = "Event::UI_SUSPEND", -- see @{ui_suspend}
+	UI_RESUME = "Event::UI_RESUME", -- see @{ui_resume}
 }
 
 events.file_close = function(...) events.emit(events.FILE_CLOSE, ...) end
@@ -180,6 +182,8 @@ events.text_changed = function(...) events.emit(events.TEXT_CHANGED, ...) end
 events.keys_pending = function(...) events.emit(events.KEYS_PENDING, ...) end
 events.process_response = function(...) events.emit(events.PROCESS_RESPONSE, ...) end
 events.ui_draw = function(...) events.emit(events.UI_DRAW, ...) end
+events.ui_suspend = function(...) events.emit(events.UI_SUSPEND, ...) end
+events.ui_resume = function(...) events.emit(events.UI_RESUME, ...) end
 
 local handlers = {}
 

@@ -86,6 +86,7 @@ typedef struct {
 	int button; /* 1..5, or 0 when unknown */
 	int line;   /* 1-based terminal row */
 	int col;    /* 1-based terminal column */
+	s64 time_ms; /* arrival time on a monotonic clock, milliseconds */
 } UiMouseEvent;
 #define VisCellStyleFGIndexGet(v)        (((u16)(v)->fg_r << 8u) | (v)->fg_g)
 #define VisCellStyleBGIndexGet(v)        (((u16)(v)->bg_g << 8u) | (v)->bg_b)
