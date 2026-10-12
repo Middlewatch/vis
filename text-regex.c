@@ -11,6 +11,7 @@ Regex *text_regex_new(void) {
 }
 
 int text_regex_compile(Regex *regex, const char *string, int cflags) {
+	regfree(&regex->regex); /* the placeholder from text_regex_new */
 	int r = regcomp(&regex->regex, string, cflags);
 	if (r)
 		regcomp(&regex->regex, "\0\0", 0);
