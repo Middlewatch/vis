@@ -61,8 +61,8 @@ static bool recovery_path(File *file, char *buf, size_t n, bool create) {
 bool vis_recovery_exists(Vis *vis, File *file) {
 	char path[PATH_MAX];
 	struct stat st;
-	return recovery_path(file, path, sizeof path, false) &&
-	       stat(path, &st) == 0 && st.st_size > 0;
+	/* an empty journal is a file that was emptied, so size does not count */
+	return recovery_path(file, path, sizeof path, false) && stat(path, &st) == 0;
 }
 
 void vis_recovery_remove(Vis *vis, File *file) {
