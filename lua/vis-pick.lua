@@ -9,8 +9,8 @@
 -- the match at its line; `pick.word()` is grep seeded with the word under
 -- the cursor; `pick.symbols()` hands over to vis-lspc's symbol window.
 -- Files open through `pick.open(path, line)`: a window already showing
--- the file gets focus, otherwise the current window takes the file when
--- it may be closed, and a split opens when it may not. `pick.root()` is
+-- the file gets focus, otherwise the current window takes the file and
+-- the one it showed stays as a hidden buffer. `pick.root()` is
 -- the git toplevel of the current file's directory, or that directory.
 -- Knobs: `pick.fzf`, `pick.rg`, `pick.fd`, `pick.preview`.
 require('vis')
@@ -63,10 +63,8 @@ function pick.open(path, line, col)
 			break
 		end
 	end
-	if vis.win.file.path ~= path then
-		if not vis:command("e " .. path) then
-			if not vis:command("open " .. path) then return false end
-		end
+	if vis.win.file.path ~= path and not vis:command("e " .. path) then
+		return false
 	end
 	if line then vis.win.selection:to(line, col or 1) end
 	return true

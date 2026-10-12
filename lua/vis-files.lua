@@ -5,7 +5,9 @@
 -- `files.recent` holds the paths shown in a focused window this session,
 -- most recent first, and `files.positions` the line last seen in each;
 -- `files.pick_recent()` is fzf over them and `files.alternate()` goes to
--- the one before the current, both back to that line. Pins are a
+-- the one before the current, both back to that line.
+-- `files.pick_buffers()` is fzf over the editor's buffers (`vis:files()`,
+-- hidden ones marked) and shows the choice with `:b`. Pins are a
 -- numbered list per project, harpoon-style: `files.pin(n)` pins the
 -- current file and line as entry n (appended without n), `files.jump(n)`
 -- opens pin n, `files.unpin()` drops the current file's pin, and
@@ -86,6 +88,27 @@ function files.pick_recent()
 	if status ~= 0 or not out then return end
 	local path = out:match("^[^\n]*\t([^\n]*)")
 	if path then pick.open(path, files.positions[path]) end
+end
+
+function files.pick_buffers()
+	local shown = {}
+	for win in vis:windows() do
+		if win.file then shown[win.file.number] = true end
+	end
+	local rows = {}
+	for file in vis:files() do
+		if file.number > 0 and file ~= vis.win.file then
+			rows[#rows + 1] = string.format("%3d %s%s  %s\t%d", file.number,
+				shown[file.number] and "a" or "h", file.modified and "+" or " ",
+				file.name or "[No Name]", file.number)
+		end
+	end
+	if #rows == 0 then return vis:info("no other buffers") end
+	local cmd = pick.fzf .. " --delimiter '\t' --with-nth 1 --tiebreak=index"
+	local status, out = vis:pipe(table.concat(rows, "\n") .. "\n", cmd, true)
+	if status ~= 0 or not out then return end
+	local number = out:match("\t(%d+)")
+	if number then vis:command("b " .. number) end
 end
 
 function files.alternate()
