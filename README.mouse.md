@@ -330,8 +330,9 @@ journals. `:q!` on a window that is not the last only hides the file;
 
 The recovery journal, `vis-recovery.c`: a named file whose text changed
 since the last journal is written whole to
-`$XDG_STATE_HOME/vis/recovery/<path with / as %>` (temporary file and
-rename through `mkstemp`) every time the editor takes its undo
+`$XDG_STATE_HOME/vis/recovery/<absolute path>`, the file's own path
+mirrored under the recovery directory (temporary file and rename
+through `mkstemp`), every time the editor takes its undo
 snapshot, which is on the return to NORMAL and on insert idle, and
 right after undo, redo, `:earlier` and `:later`, so a crash loses at
 most the current edit burst. Files above 8 MiB are skipped. The journal

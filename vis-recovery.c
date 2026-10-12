@@ -1,5 +1,5 @@
 /* Recovery journal: the unsaved text of a named file, written to
- * $XDG_STATE_HOME/vis/recovery/<path with / as %> on every undo snapshot
+ * $XDG_STATE_HOME/vis/recovery/<absolute path> on every undo snapshot
  * and removed when the file is saved or deliberately dropped, so a crash
  * or a lost terminal costs at most the last edit burst. A journal found
  * when a file is opened belongs to an earlier session: it is neither
@@ -15,7 +15,21 @@
 /* files above this are not journaled */
 #define VIS_RECOVERY_MAX_SIZE (8u << 20)
 
-static bool recovery_dir(char *buf, size_t n, bool create) {
+/* mkdir -p for every directory above the last / in path */
+static bool mkdir_parents(char *path) {
+	for (char *p = path + 1; *p; p++) {
+		if (*p != '/')
+			continue;
+		*p = '\0';
+		int r = mkdir(path, 0700);
+		*p = '/';
+		if (r == -1 && errno != EEXIST)
+			return false;
+	}
+	return true;
+}
+
+static bool recovery_dir(char *buf, size_t n) {
 	const char *state = getenv("XDG_STATE_HOME");
 	int len;
 	if (state && *state) {
@@ -26,39 +40,22 @@ static bool recovery_dir(char *buf, size_t n, bool create) {
 			return false;
 		len = snprintf(buf, n, "%s/.local/state/vis/recovery", home);
 	}
-	if (len < 0 || (size_t)len >= n)
-		return false;
-	if (create) {
-		/* mkdir -p: every component, EEXIST being the usual answer */
-		for (char *p = buf + 1; *p; p++) {
-			if (*p == '/') {
-				*p = '\0';
-				mkdir(buf, 0700);
-				*p = '/';
-			}
-		}
-		if (mkdir(buf, 0700) == -1 && errno != EEXIST)
-			return false;
-	}
-	return true;
+	return len >= 0 && (size_t)len < n;
 }
 
-/* the journal path of a named, non-internal file */
+/* the journal of a named, non-internal file: its absolute path mirrored
+ * under the recovery directory, so no two files can share one */
 static bool recovery_path(File *file, char *buf, size_t n, bool create) {
 	if (file->internal || file->filepath.length == 0)
 		return false;
-	if (!recovery_dir(buf, n, create))
+	if (!recovery_dir(buf, n))
 		return false;
 	size_t len = strlen(buf);
-	if (len + 1 + (size_t)file->filepath.length + 1 > n)
+	if (len + (size_t)file->filepath.length + 1 > n)
 		return false;
-	buf[len++] = '/';
-	for (ptrdiff_t i = 0; i < file->filepath.length; i++) {
-		char c = (char)file->filepath.data[i];
-		buf[len++] = c == '/' ? '%' : c;
-	}
-	buf[len] = '\0';
-	return true;
+	memcpy(buf + len, file->filepath.data, file->filepath.length);
+	buf[len + file->filepath.length] = '\0';
+	return !create || mkdir_parents(buf);
 }
 
 bool vis_recovery_exists(Vis *vis, File *file) {
@@ -70,8 +67,15 @@ bool vis_recovery_exists(Vis *vis, File *file) {
 
 void vis_recovery_remove(Vis *vis, File *file) {
 	char path[PATH_MAX];
-	if (recovery_path(file, path, sizeof path, false))
-		unlink(path);
+	if (recovery_path(file, path, sizeof path, false) && unlink(path) == 0) {
+		/* drop the directories the journal leaves empty, below the recovery root */
+		size_t root = strlen(path) - (size_t)file->filepath.length;
+		for (char *slash; (slash = strrchr(path, '/')) && (size_t)(slash - path) > root; ) {
+			*slash = '\0';
+			if (rmdir(path) != 0)
+				break;
+		}
+	}
 	file->recovery_dirty = false;
 	file->recovery_pending = false;
 }
@@ -92,9 +96,8 @@ void vis_recovery_write(Vis *vis, File *file) {
 	if (size > VIS_RECOVERY_MAX_SIZE)
 		return;
 
-	/* the temporary name starts with a dot and a journal name with %, the
-	 * encoded leading slash, so they never collide (a.tmp is a valid file
-	 * name); mkstemp keeps two editors journaling the same file apart */
+	/* the temporary file sits beside the journal; mkstemp's O_EXCL keeps
+	 * it clear of a sibling's journal and of a second editor's temporary */
 	char path[PATH_MAX], tmp[PATH_MAX];
 	bool ok = recovery_path(file, path, sizeof path, true);
 	int fd = -1;
