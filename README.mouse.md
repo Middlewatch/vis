@@ -145,6 +145,23 @@ it; a nesting counter on `Vis` tells the two cases apart. It is the hook for a w
 draw the bindings under it from `vis:mappings` in the overlay; on `nil`,
 hide it.
 
+## Register event
+
+`vis.events.REGISTER_PUT` fires once after a yank, delete, change or
+replace has filled its register:
+
+    register_put(name, op, count)
+
+`name` is the register's one-character name (`"` for the unnamed one,
+`+` for the clipboard), `op` one of `"yank"`, `"delete"`, `"change"`,
+`"replace"`, and `count` the number of slots written, one per selection.
+It is emitted from the operator loop in `vis.c` after `register_resize`,
+so it reports the whole operation rather than each cursor, and the content
+is already in `vis.registers[name]` (for `+` and `*` it has gone through
+vis-clipboard). Puts by sam commands, the search and command registers,
+and Lua writes to `vis.registers` do not fire it. It exists so the
+editor can say what was copied where, which stock vis never does.
+
 ## Modeline
 
 `lua/vis-modeline.lua` is a `WIN_STATUS` handler that builds a
@@ -211,7 +228,17 @@ included. A click on an entry types its key. The box goes when the
 prefix resolves or is abandoned. There is
 no delay: vis has no timer, so the box appears on the first key. Terminal
 size comes from `vis.ui.width` and `vis.ui.height`, a one-line addition
-in `vis-lua.c` that the box needs to anchor itself to the bottom.
+in `vis-lua.c` that the box needs to anchor itself. `hints.anchor` is
+`"bottom"` (full width above the status line) or `"center"`, a block in
+the middle of the screen no wider than its columns, placed with
+`overlay.center(width, height)` from `vis-overlay.lua`.
+
+The leader map itself lives in `~/.config/vis/visrc.lua`, grouped the
+Doom Emacs way (`b` buffers, `c` code, `f` files, `g` git, `h` harpoon,
+`q` quit, `s` search, `t` toggles, `w` windows), with the top-level
+shortcuts `Space Space` (find file), `Space ,` (recent file) and
+`Space /` (grep). Every entry is a plain `vis:map` with a help string,
+which is what the box displays, so the config is the menu.
 
 ## Completion
 
@@ -238,6 +265,42 @@ and `completion.max_scan` (files over that size give no buffer words).
 It needs `lspc.complete(win, on_result, trigger)` and the `on_result`
 request context, both on the fork's `incremental-sync` branch of
 vis-lspc (see LSP below); without lspc the file's words still complete.
+
+## Registers
+
+`lua/vis-registers.lua` consumes `REGISTER_PUT`. Each put is reported
+on the info line, as in `yank 22 lines → "+`, and kept in
+`registers.last`, which `vis-modeline` shows in its x section as
+`"+ 22L` until the next put. `registers.toggle()` draws a centered
+overlay listing every filled register (the special ones in
+`registers.names`, then `a`-`z`) with its size and first line; a click on
+a row puts that register after the cursor. Reading `+` and `*` costs a
+vis-clipboard call each.
+
+## Pickers
+
+`lua/vis-pick.lua` runs fzf through a fullscreen `vis:pipe` and acts on
+the chosen row: `pick.lines()` jumps to a line of the current file
+(`nl` feeds the numbered file to fzf), `pick.files()` opens a file under
+the project root (`fd`), `pick.grep(query)` live-greps the root with
+`rg` on every keystroke and opens the match at its line with a `bat` or
+`sed` preview, `pick.word()` seeds grep with the word under the cursor.
+`pick.root()` is the git toplevel of the current file's directory, or
+that directory. `pick.open(path, line)` is the one way files get opened
+from Lua here: a window already showing the file takes focus, otherwise
+`:e` replaces the current window when it may be closed and `:open`
+splits when it may not.
+
+## Files
+
+`lua/vis-files.lua` keeps `files.recent`, the paths shown in a focused
+window this session (bumped from `UI_DRAW`, most recent first), with
+`files.pick_recent()` as the fzf over them and `files.alternate()` as
+the jump to the previous one. Pins are a numbered per-project list in
+the harpoon style: `files.pin(n)`, `files.jump(n)`, `files.unpin()`,
+and `files.toggle()` for a centered overlay where a click jumps. They
+are stored as `line<Tab>path` rows in `$XDG_STATE_HOME/vis/pins/<root
+with / as %>`, so they survive restarts and crashes.
 
 ## LSP
 

@@ -3,10 +3,12 @@
 --   hints = require('vis-hints')
 --
 -- On KEYS_PENDING the bindings under the typed prefix are listed in the
--- overlay just above the status line, in columns: the next key, then its
--- help text from vis:mappings, or a group name from `hints.groups` when
--- more keys follow. A click on an entry types its key. The box goes when
--- the prefix resolves or is dropped.
+-- overlay, in columns: the next key, then its help text from
+-- vis:mappings, or a group name from `hints.groups` when more keys
+-- follow. A click on an entry types its key. The box goes when the
+-- prefix resolves or is dropped. `hints.anchor` puts the box across the
+-- bottom, above the status line ("bottom", the default), or as a compact
+-- block in the middle of the screen ("center").
 -- `hints.triggers` limits the menu to some prefixes (the leader by
 -- default); set it to nil for every prefix. Colors come from
 -- `hints.colors`, read when a style is first used.
@@ -23,6 +25,10 @@ hints.leader = " "
 -- prefixes that open the menu; nil means every pending prefix
 hints.triggers = { hints.leader }
 
+-- "bottom": full width above the status line; "center": a block as wide
+-- as its columns in the middle of the screen
+hints.anchor = "bottom"
+
 -- group names, keyed by the full key sequence
 hints.groups = {
 	[hints.leader .. "b"] = "buffers",
@@ -30,7 +36,6 @@ hints.groups = {
 	[hints.leader .. "f"] = "files",
 	[hints.leader .. "g"] = "git",
 	[hints.leader .. "h"] = "harpoon",
-	[hints.leader .. "p"] = "projects",
 	[hints.leader .. "q"] = "quit",
 	[hints.leader .. "s"] = "search",
 	[hints.leader .. "t"] = "tools",
@@ -159,7 +164,7 @@ end
 -- a click on an entry types its key, continuing the pending sequence
 local function clicked(row, m)
 	if not layout or row < 2 then return end
-	local x = (m.col or 1) - 2 -- 0-based cell past the leading space
+	local x = (m.col or 1) - 2 - layout.x -- 0-based cell past the leading space
 	if x < 0 then return end
 	local e = layout.entries[(x // layout.colw) * layout.rows + row - 1]
 	if e then vis:feedkeys(e.key) end
@@ -179,6 +184,9 @@ local function show(prefix)
 	local sep = " " .. hints.sep .. " "
 	local colw = math.min(width, keyw + len(sep) + textw + hints.gap)
 	local cols = math.max(1, width // colw)
+	local centered = hints.anchor == "center"
+	-- a centered block takes no more columns than its rows need
+	if centered then cols = math.max(1, math.min(cols, math.ceil(#entries / hints.max_rows))) end
 	local rows = math.min(hints.max_rows, math.ceil(#entries / cols))
 	local fit = rows * cols
 
@@ -205,11 +213,16 @@ local function show(prefix)
 	local stys = { style("title") }
 	for r = 2, #lines do stys[r] = style("entry") end
 
+	local x, y, boxw = 0, math.max(0, height - 1 - #lines), width
+	if centered then
+		boxw = math.min(width, math.max(len(title) + 1, 1 + cols * colw))
+		x, y = overlay.center(boxw, #lines)
+	end
+
 	shown = true
-	layout = { entries = entries, rows = rows, colw = colw }
+	layout = { entries = entries, rows = rows, colw = colw, x = x }
 	overlay.show(hints, {
-		x = 0, y = math.max(0, height - 1 - #lines),
-		width = width, lines = lines,
+		x = x, y = y, width = boxw, lines = lines,
 		style = style("entry"), styles = stys,
 	}, clicked)
 end
