@@ -164,6 +164,10 @@ vis_text_changed(void *ctx, Text *txt, size_t pos, size_t deleted, const char *i
 	for (File *file = vis->files; file; file = file->next) {
 		if (file->text == txt) {
 			file->recovery_dirty = true;
+			/* undo, redo and history traversal report no range and take no
+			 * snapshot, so journal here or the undone state is lost to a crash */
+			if (pos == EPOS)
+				vis_recovery_write(vis, file);
 			break;
 		}
 	}
