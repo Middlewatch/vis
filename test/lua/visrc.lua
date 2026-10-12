@@ -104,12 +104,15 @@ function describe(s, fn)
 end
 
 
+local started = false
 vis.events.subscribe(vis.events.WIN_OPEN, function(win)
-	-- test.in file passed to vis
+	-- test.in file passed to vis; a test that opens windows of its
+	-- own must not start over
 	local in_file = win.file.name
-	if not in_file then
+	if not in_file or started then
 		return
 	end
+	started = true
 
 	-- use the corresponding test.lua file
 	lua_file = string.gsub(in_file, '%.in$', '.lua')

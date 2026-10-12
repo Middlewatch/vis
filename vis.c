@@ -177,11 +177,13 @@ vis_file_new(Vis *vis, const char *name, VisFileNewFlags flags)
 
 	str8 filepath = name ? vis_absolute_path(name) : (str8){0};
 	if (filepath.length > 0 && (flags & VisFileNewFlag_ForceNew) == 0) {
+		/* an existing file is the same by inode, a missing one by name only */
 		struct stat new;
-		if (stat((char *)filepath.data, &new) == 0 || errno == ENOENT) {
+		bool exists = stat((char *)filepath.data, &new) == 0;
+		if (exists || errno == ENOENT) {
 			for (File *file = vis->files; file; file = file->next) {
 				if (!file->internal && (str8_equal(file->filepath, filepath) ||
-				    (file->stat.st_dev == new.st_dev && file->stat.st_ino == new.st_ino)))
+				    (exists && file->stat.st_dev == new.st_dev && file->stat.st_ino == new.st_ino)))
 				{
 					result = file;
 					break;
