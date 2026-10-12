@@ -2129,15 +2129,6 @@ int vis_pipe(Vis *vis, File *file, Filerange range, const char *argv[],
 	return _vis_pipe(vis, file, range, NULL, argv, stdout_context, read_stdout, stderr_context, read_stderr, fullscreen);
 }
 
-int vis_pipe_buf(Vis *vis, const char* buf, const char *argv[],
-	void *stdout_context, ssize_t (*read_stdout)(void *stdout_context, char *data, size_t len),
-	void *stderr_context, ssize_t (*read_stderr)(void *stderr_context, char *data, size_t len),
-	bool fullscreen)
-{
-	return _vis_pipe(vis, 0, text_range_empty(), buf, argv, stdout_context, read_stdout,
-	                 stderr_context, read_stderr, fullscreen);
-}
-
 static int _vis_pipe_collect(Vis *vis, File *file, Filerange range, const char* buf,
                              const char *argv[],char **out, char **err, bool fullscreen)
 {
