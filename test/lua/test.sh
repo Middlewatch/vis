@@ -1,6 +1,9 @@
 #!/bin/sh
 
 export VIS_PATH=.
+# recovery journals of the edited fixtures go to a scratch state dir
+XDG_STATE_HOME=$(mktemp -d); export XDG_STATE_HOME
+trap 'rm -rf "$XDG_STATE_HOME"' EXIT
 [ -z "$VIS" ] && VIS="../../vis"
 
 # run vis under gdb

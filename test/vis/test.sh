@@ -3,6 +3,9 @@
 export VIS_PATH=.
 export PATH="$(pwd)/../..:$PATH"
 export LANG="C.UTF-8"
+# recovery journals of the edited fixtures go to a scratch state dir
+XDG_STATE_HOME=$(mktemp -d); export XDG_STATE_HOME
+trap 'rm -rf "$XDG_STATE_HOME"' EXIT
 [ -z "$VIS" ] && VIS="../../vis"
 $VIS -v
 

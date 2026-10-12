@@ -6,6 +6,9 @@ NL='
 export LANG="C.UTF-8"
 
 export VIS_PATH=.
+# recovery journals of the edited fixtures go to a scratch state dir
+XDG_STATE_HOME=$(mktemp -d); export XDG_STATE_HOME
+trap 'rm -rf "$XDG_STATE_HOME"' EXIT
 [ -z "$VIS" ] && VIS="../../vis"
 [ -z "$SAM" ] && SAM="sam"
 [ -z "$PLAN9" ] && PLAN9="/usr/local/plan9/bin"
