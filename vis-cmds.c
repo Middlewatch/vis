@@ -403,11 +403,21 @@ static bool cmd_bdelete(Vis *vis, Win *win, Command *cmd, const char *argv[], Se
 			break;
 		}
 	}
+	/* hold the file while its windows move: vis_window_close frees an
+	 * unnamed, untouched buffer on its own, and it is freed once below */
+	target->refcount++;
 	for (Win *next, *w = vis->windows; w; w = next) {
 		next = w->next;
-		if (w->file == target && !vis_window_show_file(vis, w, other))
+		if (w->file != target)
+			continue;
+		if (!vis_window_show_file(vis, w, other)) {
+			target->refcount--;
 			return false;
+		}
+		if (!other)
+			other = vis->win->file; /* the empty buffer the first window got */
 	}
+	target->refcount--;
 	if (cmd->flags == '!')
 		vis_file_discard(vis, target);
 	else
