@@ -246,7 +246,7 @@ static const CommandDef vis_sam_command_definitions[] = {
 		CMD_ARGV|CMD_ONCE|CMD_ADDRESS_NONE, 0, cmd_ls
 	}, {
 		str8_comp("b"), VIS_HELP("Show buffer `:b <number|name>` in this window; list them without argument")
-		CMD_ARGV|CMD_ONCE|CMD_ADDRESS_NONE, 0, cmd_buffer
+		CMD_ARGV|CMD_ONCE|CMD_ADDRESS_NONE|CMD_DESTRUCTIVE, 0, cmd_buffer
 	}, {
 		str8_comp("bd"), VIS_HELP("Delete buffer `:bd[!] [number|name]`, this window's without argument")
 		CMD_ARGV|CMD_FORCE|CMD_ONCE|CMD_ADDRESS_NONE|CMD_DESTRUCTIVE, 0, cmd_bdelete
