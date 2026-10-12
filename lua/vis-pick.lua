@@ -35,6 +35,12 @@ local function sh(s)
 	return "'" .. s:gsub("'", "'\\''") .. "'"
 end
 
+-- one argument for a : command: sam splits on blanks and reads backslash
+-- escapes, so the path goes in double quotes with \ and " escaped
+local function arg(s)
+	return '"' .. s:gsub('[\\"]', '\\%0') .. '"'
+end
+
 local function dir_of(file)
 	local path = file and file.path
 	if path then return path:match("^(.*)/[^/]*$") or "/" end
@@ -63,7 +69,7 @@ function pick.open(path, line, col)
 			break
 		end
 	end
-	if vis.win.file.path ~= path and not vis:command("e " .. path) then
+	if vis.win.file.path ~= path and not vis:command("e " .. arg(path)) then
 		return false
 	end
 	if line then vis.win.selection:to(line, col or 1) end
