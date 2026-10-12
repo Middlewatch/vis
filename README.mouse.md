@@ -85,7 +85,10 @@ Features share the one overlay through `lua/vis-overlay.lua`:
 drew (nothing is restored later); `hide` by anyone but the owner does
 nothing. The optional third argument receives clicks on the box, routed
 there by `vis-mouse`'s default `overlay_click`. Hints and completion go
-through it, and the completion list accepts the clicked row.
+through it, and the completion list accepts the clicked row. `<Escape>`
+in normal mode calls `overlay.dismiss()` before its usual job: the
+owner's `hide()` runs when it has one, and the box goes either way, so
+the register and pin readouts close like any other popup.
 
 The inverse of the hit test anchors a popup at a file position:
 

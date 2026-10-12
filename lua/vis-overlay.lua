@@ -11,6 +11,10 @@
 -- it from under the one that has it. The optional click handler gets the
 -- 1-based row and the mouse state; vis-mouse routes overlay clicks to
 -- overlay.click, which forwards to the owner's handler.
+--
+-- <Escape> in normal mode dismisses the box before doing what it does
+-- anyway: overlay.dismiss() calls the owner's hide() when it has one, so
+-- the owner's own state follows, and drops the box either way.
 require('vis')
 
 local overlay = {}
@@ -43,5 +47,22 @@ end
 function overlay.click(row, m)
 	if on_click then on_click(row, m) end
 end
+
+-- take the box from its owner, whoever that is; true when one was shown
+function overlay.dismiss()
+	local who = owner
+	if not who then return false end
+	if type(who.hide) == "function" then who.hide() end
+	if owner == who then
+		owner, on_click = nil, nil
+		vis:overlay_hide()
+	end
+	return true
+end
+
+vis:map(vis.modes.NORMAL, "<Escape>", function()
+	overlay.dismiss()
+	vis:feedkeys("<vis-mode-normal-escape>")
+end, "Reset count or remove all non-primary selections; hide the overlay")
 
 return overlay
