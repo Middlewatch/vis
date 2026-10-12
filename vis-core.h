@@ -296,6 +296,7 @@ enum VisEvents {
 	VIS_EVENT_MOUSE, /* see README.mouse.md */
 	VIS_EVENT_TEXT_CHANGED, /* see text_on_change() */
 	VIS_EVENT_KEYS_PENDING, /* see vis_keys_pending() */
+	VIS_EVENT_REGISTER_PUT, /* an operator wrote a register, see vis_lua_register_put() */
 };
 
 VIS_INTERNAL bool vis_event_emit(Vis*, enum VisEvents, ...);

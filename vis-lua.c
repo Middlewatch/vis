@@ -4087,6 +4087,32 @@ static void vis_lua_keys_pending(Vis *vis, const char *prefix) {
 }
 
 /***
+ * An operator wrote a register.
+ *
+ * Fires once after a yank, delete, change or replace has filled its
+ * register, with one slot per selection. The content is in
+ * `vis.registers[name]`; for the clipboard registers `+` and `*` it has
+ * already gone through vis-clipboard(1). Puts by sam commands, the search
+ * and command registers, and Lua writes to `vis.registers` do not fire it.
+ *
+ * @function register_put
+ * @tparam string name the register's one-character name, `"` for the unnamed one
+ * @tparam string op `"yank"`, `"delete"`, `"change"` or `"replace"`
+ * @tparam int count the number of slots written, one per selection
+ */
+static void vis_lua_register_put(Vis *vis, char name, const char *op, size_t count) {
+	lua_State *L = vis->lua;
+	vis_lua_event_get(L, "register_put");
+	if (lua_isfunction(L, -1)) {
+		lua_pushlstring(L, &name, 1);
+		lua_pushstring(L, op);
+		lua_pushinteger(L, count);
+		pcall(vis, L, 3, 0);
+	}
+	lua_pop(L, 1);
+}
+
+/***
  * The response received from the process started via @{vis:communicate}.
  * @function process_response
  * @tparam string name the name of process given to @{vis:communicate}
@@ -4229,6 +4255,12 @@ bool vis_event_emit(Vis *vis, enum VisEvents id, ...) {
 	case VIS_EVENT_KEYS_PENDING:
 		vis_lua_keys_pending(vis, va_arg(ap, const char *));
 		break;
+	case VIS_EVENT_REGISTER_PUT: {
+		char name = (char)va_arg(ap, int);
+		const char *op = va_arg(ap, const char *);
+		size_t count = va_arg(ap, size_t);
+		vis_lua_register_put(vis, name, op, count);
+	} break;
 	}
 
 	va_end(ap);

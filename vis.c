@@ -965,6 +965,12 @@ void vis_do(Vis *vis) {
 		    a->op == &vis_operators[VIS_OP_CHANGE] ||
 		    a->op == &vis_operators[VIS_OP_REPLACE]) {
 			register_resize(reg, last_reg_slot+1);
+			const char *op = a->op == &vis_operators[VIS_OP_YANK] ? "yank" :
+			                 a->op == &vis_operators[VIS_OP_DELETE] ? "delete" :
+			                 a->op == &vis_operators[VIS_OP_CHANGE] ? "change" : "replace";
+			char name = vis_register_to(vis, reg - vis->registers);
+			if (name)
+				vis_event_emit(vis, VIS_EVENT_REGISTER_PUT, name, op, last_reg_slot+1);
 		}
 
 		/* we do not support visual repeat, still do something reasonable */

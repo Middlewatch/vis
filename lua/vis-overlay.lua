@@ -3,6 +3,7 @@
 --   local overlay = require('vis-overlay')
 --   overlay.show(me, {x = 0, y = 0, lines = {"..."}}, function(row, m) end)
 --   overlay.hide(me)
+--   local x, y = overlay.center(width, height)
 --
 -- show() hands the box to its caller, replacing whatever another owner
 -- drew (nothing is restored when the new owner hides). hide() by anyone
@@ -29,6 +30,14 @@ end
 
 function overlay.owner()
 	return owner
+end
+
+-- top left cell of a box of the given size centered on the terminal,
+-- clamped to the top left corner when the box is larger
+function overlay.center(width, height)
+	local x = math.max(0, (vis.ui.width - width) // 2)
+	local y = math.max(0, (vis.ui.height - 1 - height) // 2)
+	return x, y
 end
 
 function overlay.click(row, m)

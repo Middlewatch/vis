@@ -5,7 +5,8 @@
 -- Sections follow lualine: a is the mode block, b the git branch and
 -- LSP diagnostic counts, c the file name with its modified flag. The
 -- right side mirrors them: x holds pending keys or count, selection
--- index, LSP server and syntax; y the percentage; z line:col. Only the
+-- index, the last register written (through vis-registers when loaded),
+-- LSP server and syntax; y the percentage; z line:col. Only the
 -- focused window shows a and z. Colors come from `modeline.colors`, read
 -- when a style is first used, so set them in visrc before the first
 -- redraw. `modeline.enabled = false` hands the status line back to the
@@ -30,6 +31,7 @@ modeline.colors = {
 	info     = "fore:cyan",
 	hint     = "fore:blue",
 	lsp      = "fore:green",
+	register = "fore:cyan",
 }
 
 -- Powerline glyphs between sections and between items of one section.
@@ -51,6 +53,7 @@ modeline.symbols = {
 	info     = "\u{f05a} ",
 	hint     = "\u{f0eb} ",
 	lsp      = "\u{f085} ",
+	register = "\u{f0c5} ",
 }
 
 -- seconds between re-reads of .git/HEAD
@@ -256,6 +259,11 @@ local function status(win)
 	end
 	if #win.selections > 1 then
 		table.insert(x.items, sel.number .. "/" .. #win.selections)
+	end
+	local last = package.loaded["vis-registers"] and package.loaded["vis-registers"].last
+	if last then
+		local amount = last.lines > 1 and last.lines .. "L" or last.bytes .. "B"
+		table.insert(x.items, { sym.register .. '"' .. last.name .. " " .. amount, colors.register })
 	end
 	if servers and servers ~= "" then
 		table.insert(x.items, { sym.lsp .. servers, colors.lsp })
