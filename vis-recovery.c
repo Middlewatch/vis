@@ -1,7 +1,10 @@
 /* Recovery journal: the unsaved text of a named file, written to
  * $XDG_STATE_HOME/vis/recovery/<path with / as %> on every undo snapshot
  * and removed when the file is saved or deliberately dropped, so a crash
- * or a lost terminal costs at most the last edit burst. See doc/adr/0001.
+ * or a lost terminal costs at most the last edit burst. A journal found
+ * when a file is opened belongs to an earlier session: it is neither
+ * rewritten nor removed until :recover loads it, :recover! drops it, or
+ * a save supersedes it. See doc/adr/0001.
  */
 #include <errno.h>
 #include <fcntl.h>
@@ -70,6 +73,7 @@ void vis_recovery_remove(Vis *vis, File *file) {
 	if (recovery_path(file, path, sizeof path, false))
 		unlink(path);
 	file->recovery_dirty = false;
+	file->recovery_pending = false;
 }
 
 /* write the journal when the text changed since the last one; a text back
@@ -77,6 +81,8 @@ void vis_recovery_remove(Vis *vis, File *file) {
 void vis_recovery_write(Vis *vis, File *file) {
 	if (!file->recovery_dirty || file->internal || file->filepath.length == 0)
 		return;
+	if (file->recovery_pending)
+		return; /* an earlier session's journal is not ours to overwrite */
 	Text *txt = file->text;
 	if (!text_modified(txt)) {
 		vis_recovery_remove(vis, file);
@@ -155,6 +161,8 @@ bool vis_recovery_load(Vis *vis, File *file) {
 		Text *txt = file->text;
 		ok = text_delete(txt, 0, text_size(txt)) &&
 		     (len == 0 || text_insert(vis, txt, 0, data, len));
+		if (ok)
+			file->recovery_pending = false; /* the journal is this session's now */
 	}
 	free(data);
 	return ok;

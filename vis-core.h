@@ -161,6 +161,7 @@ struct File { /* shared state among windows displaying the same file */
 	size_t last_pos;                 /* cursor when the last window showing it closed */
 	bool   recovery_dirty;           /* changed since the recovery journal was written */
 	bool   recovery_failed;          /* a journal write failed and was reported */
+	bool   recovery_pending;         /* a journal from before this session: kept and not rewritten until :recover, :recover! or a save */
 };
 
 struct Win {

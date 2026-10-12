@@ -26,6 +26,12 @@ or explicitly discarded, and offered through `:recover` on the next open.
 Closing the last window with any modified file refuses; `:qall!` is the
 override and discards the journals.
 
+A journal found when a file is opened belongs to an earlier session.
+The editor announces it and leaves it alone: it is neither rewritten by
+this session's snapshots nor removed by a clean exit, until `:recover`
+loads it, `:recover!` drops it, or a save supersedes it. Edits made
+before that choice are not journaled.
+
 ## Consequences
 
 Switching files never reloads or loses edits, and the recent list

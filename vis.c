@@ -47,13 +47,14 @@ vis_file_set_name_relative(File *file, str8 directory)
 
 /* Free a file whatever its refcount; windows release theirs through
  * vis_file_unref. The recovery journal goes with it unless the file is
- * modified and the exit is not an explicit discard. */
+ * modified, or the journal is an earlier session's that was never
+ * accepted or dropped, and the exit is not an explicit discard. */
 VIS_INTERNAL void
 vis_file_free(Vis *vis, File *file)
 {
 	if (file) {
 		if (!file->internal) {
-			if (!text_modified(file->text) || vis->discard_recovery)
+			if ((!text_modified(file->text) && !file->recovery_pending) || vis->discard_recovery)
 				vis_recovery_remove(vis, file);
 			vis_event_emit(vis, VIS_EVENT_FILE_CLOSE, file);
 		}
@@ -228,9 +229,11 @@ vis_file_new(Vis *vis, const char *name, VisFileNewFlags flags)
 			if (!result->internal) {
 				text_on_change(text, vis_text_changed, vis);
 				vis_event_emit(vis, VIS_EVENT_FILE_OPEN, result);
-				if (vis_recovery_exists(vis, result))
-					vis_info_show(vis, "Journaled changes exist for %.*s: :recover loads them, :recover! drops them",
+				if (vis_recovery_exists(vis, result)) {
+					result->recovery_pending = true;
+					vis_info_show(vis, "Journaled changes exist for %.*s: :recover loads them, :recover! drops them; edits are not journaled until then",
 					              (int)result->name.length, result->name.data);
+				}
 			}
 		}
 
