@@ -86,11 +86,20 @@ void vis_recovery_write(Vis *vis, File *file) {
 	if (size > VIS_RECOVERY_MAX_SIZE)
 		return;
 
+	/* the temporary name starts with a dot and a journal name with %, the
+	 * encoded leading slash, so they never collide (a.tmp is a valid file
+	 * name); mkstemp keeps two editors journaling the same file apart */
 	char path[PATH_MAX], tmp[PATH_MAX];
-	bool ok = recovery_path(file, path, sizeof path, true) &&
-	          snprintf(tmp, sizeof tmp, "%s.tmp", path) < (int)sizeof tmp;
-	int fd = ok ? open(tmp, O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC, 0600) : -1;
+	bool ok = recovery_path(file, path, sizeof path, true);
+	int fd = -1;
+	if (ok) {
+		const char *slash = strrchr(path, '/');
+		int n = snprintf(tmp, sizeof tmp, "%.*s/.tmpXXXXXX", (int)(slash - path), path);
+		if (n > 0 && n < (int)sizeof tmp)
+			fd = mkstemp(tmp);
+	}
 	if (fd != -1) {
+		fcntl(fd, F_SETFD, FD_CLOEXEC);
 		ssize_t written = text_write_range(txt, text_range_new(0, size), fd);
 		ok = written == (ssize_t)size;
 		if (close(fd) != 0)
