@@ -795,17 +795,23 @@ void vis_cleanup(Vis *vis)
 		vis_window_close(vis->windows);
 	vis_process_waitall(vis);
 
+	/* Free the hidden buffers while Lua is still alive: vis_file_free emits
+	 * FILE_CLOSE, which the Lua event path delivers by dereferencing
+	 * vis->lua. QUIT below runs lua_close, so the non-internal files must go
+	 * first. (Upstream freed them on window close, before QUIT; hidden
+	 * buffers keep them until here, so the order is restored explicitly.) */
+	for (File *next, *file = vis->files; file; file = next) {
+		next = file->next;
+		if (!file->internal)
+			vis_file_free(vis, file);
+	}
+
 	// NOTE: it is possible for a plugin to call a lua function
 	// such as vis:message() in QUIT which requires the existence
 	// of vis' internal files. This must be emitted prior to
 	// the release of those files.
 	vis_event_emit(vis, VIS_EVENT_QUIT);
 
-	for (File *next, *file = vis->files; file; file = next) {
-		next = file->next;
-		if (!file->internal)
-			vis_file_free(vis, file);
-	}
 	vis_file_free(vis, vis->prompt_file);
 	vis_file_free(vis, vis->error_file);
 
