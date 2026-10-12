@@ -230,7 +230,7 @@ static void obj_type_new(lua_State *L, str8 type)
  *
  *   return registry["vis.types"][getmetatable(userdata)]
  */
-const char *obj_type_get(lua_State *L) {
+static const char *obj_type_get(lua_State *L) {
 	if (lua_isnil(L, -1))
 		return "nil";
 	lua_getfield(L, LUA_REGISTRYINDEX, "vis.types");

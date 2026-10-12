@@ -1181,7 +1181,7 @@ enum SamError sam_cmd(Vis *vis, const char *s) {
 }
 
 /* process text input, substitute register content for backreferences etc. */
-Buffer text(Vis *vis, const char *text) {
+static Buffer text(Vis *vis, const char *text) {
 	Buffer buf = {0};
 	for (size_t len = strcspn(text, "\\&"); *text; len = strcspn(++text, "\\&")) {
 		buffer_append(&buf, text, len);
