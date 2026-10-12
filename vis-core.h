@@ -157,6 +157,10 @@ struct File { /* shared state among windows displaying the same file */
 	struct stat stat;                /* filesystem information when loaded/saved, used to detect changes outside the editor */
 	File *next, *prev;
 	SelectionRegionList marks[VIS_MARK_INVALID]; /* marks which are shared across windows */
+	int    number;                   /* stable id shown by :ls, 0 for internal files */
+	size_t last_pos;                 /* cursor when the last window showing it closed */
+	bool   recovery_dirty;           /* changed since the recovery journal was written */
+	bool   recovery_failed;          /* a journal write failed and was reported */
 };
 
 struct Win {
@@ -196,6 +200,8 @@ struct Vis {
 	Win *windows;                        /* all windows currently managed by this editor instance */
 	Win *win;                            /* currently active/focused window */
 	Win *message_window;                 /* special window to display multi line messages */
+	int  file_counter;                   /* last File.number handed out */
+	bool discard_recovery;               /* exit drops the journals of modified files (:qall!) */
 	Ui ui;                               /* user interface responsible for visual appearance */
 	Register registers[VIS_REG_INVALID]; /* registers used for text manipulations yank/put etc. and macros */
 	Macro *recording, *last_recording;   /* currently (if non NULL) and least recently recorded macro */
@@ -329,6 +335,19 @@ VIS_INTERNAL void mode_set(Vis *vis, Mode *new_mode);
 VIS_INTERNAL Macro *macro_get(Vis *vis, enum VisRegister);
 
 VIS_INTERNAL Win *window_new_file(Vis*, File*, enum UiOption);
+/* file lifecycle: a file outlives its windows, see doc/adr/0001 */
+VIS_INTERNAL void  vis_file_free(Vis*, File*);
+VIS_INTERNAL void  vis_file_unref(Vis*, File*);
+VIS_INTERNAL void  vis_file_discard(Vis*, File*);
+VIS_INTERNAL File *vis_files_modified(Vis*);
+VIS_INTERNAL File *vis_file_lookup(Vis*, const char *spec);
+VIS_INTERNAL bool  vis_window_show_file(Vis*, Win*, File*);
+VIS_INTERNAL int   vis_windows_count(Vis*);
+/* recovery journal, vis-recovery.c */
+VIS_INTERNAL bool  vis_recovery_exists(Vis*, File*);
+VIS_INTERNAL void  vis_recovery_write(Vis*, File*);
+VIS_INTERNAL void  vis_recovery_remove(Vis*, File*);
+VIS_INTERNAL bool  vis_recovery_load(Vis*, File*);
 VIS_INTERNAL void window_selection_save(Win *win);
 VIS_INTERNAL void window_status_update(Vis *vis, Win *win);
 /* abandon the prompt window when focus moves off it (vis-prompt.c) */

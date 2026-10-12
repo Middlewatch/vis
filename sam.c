@@ -124,6 +124,10 @@ static bool cmd_cd(Vis*, Win*, Command*, const char *argv[], Selection*, Fileran
 static bool cmd_set(Vis*, Win*, Command*, const char *argv[], Selection*, Filerange*);
 static bool cmd_open(Vis*, Win*, Command*, const char *argv[], Selection*, Filerange*);
 static bool vis_cmd_qall(Vis*, Win*, Command*, const char *argv[], Selection*, Filerange*);
+static bool cmd_ls(Vis*, Win*, Command*, const char *argv[], Selection*, Filerange*);
+static bool cmd_buffer(Vis*, Win*, Command*, const char *argv[], Selection*, Filerange*);
+static bool cmd_bdelete(Vis*, Win*, Command*, const char *argv[], Selection*, Filerange*);
+static bool cmd_recover(Vis*, Win*, Command*, const char *argv[], Selection*, Filerange*);
 static bool cmd_split(Vis*, Win*, Command*, const char *argv[], Selection*, Filerange*);
 static bool cmd_vsplit(Vis*, Win*, Command*, const char *argv[], Selection*, Filerange*);
 static bool cmd_new(Vis*, Win*, Command*, const char *argv[], Selection*, Filerange*);
@@ -237,6 +241,18 @@ static const CommandDef vis_sam_command_definitions[] = {
 	}, {
 		str8_comp("qall"), VIS_HELP("Exit vis")
 		CMD_ARGV|CMD_FORCE|CMD_ONCE|CMD_ADDRESS_NONE|CMD_DESTRUCTIVE, 0, vis_cmd_qall
+	}, {
+		str8_comp("ls"), VIS_HELP("List buffers: number, flags (% current, a shown, h hidden, + modified), name")
+		CMD_ARGV|CMD_ONCE|CMD_ADDRESS_NONE, 0, cmd_ls
+	}, {
+		str8_comp("b"), VIS_HELP("Show buffer `:b <number|name>` in this window; list them without argument")
+		CMD_ARGV|CMD_ONCE|CMD_ADDRESS_NONE, 0, cmd_buffer
+	}, {
+		str8_comp("bd"), VIS_HELP("Delete buffer `:bd[!] [number|name]`, this window's without argument")
+		CMD_ARGV|CMD_FORCE|CMD_ONCE|CMD_ADDRESS_NONE|CMD_DESTRUCTIVE, 0, cmd_bdelete
+	}, {
+		str8_comp("recover"), VIS_HELP("Load this file's recovery journal; `:recover!` drops it")
+		CMD_ARGV|CMD_FORCE|CMD_ONCE|CMD_ADDRESS_NONE|CMD_DESTRUCTIVE, 0, cmd_recover
 	}, {
 		str8_comp("set"),  VIS_HELP("Set option")
 		CMD_ARGV|CMD_ONCE|CMD_ADDRESS_NONE, NULL, cmd_set
@@ -1499,6 +1515,7 @@ static bool cmd_write(Vis *vis, Win *win, Command *cmd, const char *argv[], Sele
 
 		/* make sure the file is marked as saved i.e. not modified */
 		text_mark_current_revision(text);
+		vis_recovery_remove(vis, file);
 		vis_event_emit(vis, VIS_EVENT_FILE_SAVE_POST, file, (char*)NULL);
 		return true;
 	}
@@ -1593,6 +1610,8 @@ static bool cmd_write(Vis *vis, Win *win, Command *cmd, const char *argv[], Sele
 		if (same_file || (!existing_file && str8_equal(file->filepath, path)))
 			file->stat = text_stat(text);
 
+		if (!text_modified(text))
+			vis_recovery_remove(vis, file);
 		vis_event_emit(vis, VIS_EVENT_FILE_SAVE_POST, file, path.data);
 
 		if (file->filepath.data != path.data)

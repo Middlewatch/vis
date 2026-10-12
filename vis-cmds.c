@@ -235,11 +235,11 @@ static bool cmd_edit(Vis *vis, Win *win, Command *cmd, const char *argv[], Selec
 	Win *oldwin = win;
 	if (!oldwin)
 		return false;
-	if (cmd->flags != '!' && !vis_window_closable(oldwin)) {
-		info_unsaved_changes(vis);
-		return false;
-	}
 	if (!argv[1]) {
+		if (cmd->flags != '!' && text_modified(oldwin->file->text)) {
+			info_unsaved_changes(vis);
+			return false;
+		}
 		if (oldwin->file->refcount > 1) {
 			vis_info_show(vis, "Can not reload file being opened multiple times");
 			return false;
@@ -300,28 +300,140 @@ vis_cmd_try_exit(Vis *vis, str8 exit_code_string)
 VIS_INTERNAL bool
 vis_cmd_quit(Vis *vis, Win *win, Command *cmd, const char *argv[], Selection *sel, Filerange *range)
 {
-	bool result = cmd->flags == '!' || vis_window_closable(win);
-	if (result) {
-		vis_window_close(win);
-		vis_cmd_try_exit(vis, str8_from_c_str(argv[1]));
-	} else {
-		info_unsaved_changes(vis);
+	/* closing a window only hides its file; the last one is the exit, which
+	 * refuses while any file is modified unless forced */
+	if (win && !win->file->internal && vis_windows_count(vis) <= 1) {
+		if (cmd->flags != '!' && vis_files_modified(vis)) {
+			info_unsaved_changes(vis);
+			return false;
+		}
+		if (cmd->flags == '!')
+			vis->discard_recovery = true;
 	}
-	return result;
+	vis_window_close(win);
+	vis_cmd_try_exit(vis, str8_from_c_str(argv[1]));
+	return true;
 }
 
 VIS_INTERNAL bool
 vis_cmd_qall(Vis *vis, Win *win, Command *cmd, const char *argv[], Selection *sel, Filerange *range)
 {
+	if (cmd->flags != '!') {
+		File *file = vis_files_modified(vis);
+		if (file) {
+			/* name is a 0-terminated suffix slice of filepath */
+			vis_info_show(vis, "No write since last change in %s (add ! to override)",
+			              file->name.length ? (char *)file->name.data : "[No Name]");
+			return false;
+		}
+	} else {
+		vis->discard_recovery = true;
+	}
 	for (Win *next, *win = vis->windows; win; win = next) {
 		next = win->next;
-		if (!win->file->internal && (!text_modified(win->file->text) || cmd->flags == '!'))
+		if (!win->file->internal)
 			vis_window_close(win);
 	}
 
 	bool result = vis_cmd_try_exit(vis, str8_from_c_str(argv[1]));
 	if (!result) info_unsaved_changes(vis);
 	return result;
+}
+
+/* :ls, one buffer per line: number, % current, a shown or h hidden, +
+ * modified, then the name. The listing's own window is left out. */
+static bool cmd_ls(Vis *vis, Win *win, Command *cmd, const char *argv[], Selection *sel, Filerange *range) {
+	File *current = win ? win->file : NULL;
+	if (!vis_window_new(vis, NULL))
+		return false;
+	Text *txt = vis->win->file->text;
+	for (int n = 1; n <= vis->file_counter; n++) {
+		for (File *file = vis->files; file; file = file->next) {
+			if (file->internal || file->number != n || file == vis->win->file)
+				continue;
+			bool shown = false;
+			for (Win *w = vis->windows; w; w = w->next) {
+				if (w->file == file && w != vis->win) {
+					shown = true;
+					break;
+				}
+			}
+			text_appendf(vis, txt, "%3d %c%c%c  %s\n", n,
+			             file == current ? '%' : ' ',
+			             shown ? 'a' : 'h',
+			             text_modified(file->text) ? '+' : ' ',
+			             file->name.length ? (char *)file->name.data : "[No Name]");
+		}
+	}
+	text_mark_current_revision(txt);
+	view_cursors_to(vis->win->view.selection, 0);
+	return true;
+}
+
+static bool cmd_buffer(Vis *vis, Win *win, Command *cmd, const char *argv[], Selection *sel, Filerange *range) {
+	if (!argv[1])
+		return cmd_ls(vis, win, cmd, argv, sel, range);
+	File *file = vis_file_lookup(vis, argv[1]);
+	if (!file) {
+		vis_info_show(vis, "No buffer `%s'", argv[1]);
+		return false;
+	}
+	return vis_window_show_file(vis, win, file);
+}
+
+/* :bd[!] [buffer]: windows showing it move to another buffer, or to an
+ * empty one, and the file goes; a modified file needs the ! */
+static bool cmd_bdelete(Vis *vis, Win *win, Command *cmd, const char *argv[], Selection *sel, Filerange *range) {
+	File *target = argv[1] ? vis_file_lookup(vis, argv[1]) : (win ? win->file : NULL);
+	if (!target || target->internal) {
+		if (argv[1])
+			vis_info_show(vis, "No buffer `%s'", argv[1]);
+		else
+			vis_info_show(vis, "No buffer to delete");
+		return false;
+	}
+	if (cmd->flags != '!' && text_modified(target->text)) {
+		info_unsaved_changes(vis);
+		return false;
+	}
+	File *other = NULL;
+	for (File *file = vis->files; file; file = file->next) {
+		if (!file->internal && file != target) {
+			other = file;
+			break;
+		}
+	}
+	for (Win *next, *w = vis->windows; w; w = next) {
+		next = w->next;
+		if (w->file == target && !vis_window_show_file(vis, w, other))
+			return false;
+	}
+	if (cmd->flags == '!')
+		vis_file_discard(vis, target);
+	else
+		vis_file_free(vis, target);
+	return true;
+}
+
+static bool cmd_recover(Vis *vis, Win *win, Command *cmd, const char *argv[], Selection *sel, Filerange *range) {
+	if (!win || win->file->internal)
+		return false;
+	File *file = win->file;
+	if (cmd->flags == '!') {
+		vis_recovery_remove(vis, file);
+		vis_info_show(vis, "Journal dropped");
+		return true;
+	}
+	if (!vis_recovery_exists(vis, file)) {
+		vis_info_show(vis, "No journal for this file");
+		return false;
+	}
+	if (!vis_recovery_load(vis, file)) {
+		vis_info_show(vis, "Could not read the journal: %s", strerror(errno));
+		return false;
+	}
+	vis_info_show(vis, "Journal loaded; :w keeps it, :e! drops it");
+	return true;
 }
 
 static bool cmd_split(Vis *vis, Win *win, Command *cmd, const char *argv[], Selection *sel, Filerange *range) {

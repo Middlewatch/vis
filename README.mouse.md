@@ -300,7 +300,46 @@ the jump to the previous one. Pins are a numbered per-project list in
 the harpoon style: `files.pin(n)`, `files.jump(n)`, `files.unpin()`,
 and `files.toggle()` for a centered overlay where a click jumps. They
 are stored as `line<Tab>path` rows in `$XDG_STATE_HOME/vis/pins/<root
-with / as %>`, so they survive restarts and crashes.
+with / as %>`, so they survive restarts and crashes. `files.pick_buffers()`
+is fzf over `vis:files()`, hidden ones marked, and switches with `:b`.
+
+## Buffers and recovery
+
+Upstream frees a file with its last window and refuses `:e` while the
+window is modified. The fork keeps every opened file in the editor's
+list until `:bd` or exit (vim's `hidden`; the decision and its
+alternatives are in `doc/adr/0001`). `vis_file_unref` is what a closing
+window calls; it frees only internal files, and an unnamed untouched
+file, since there is nothing to keep. `vis_file_free` frees for real and
+fires `FILE_CLOSE`, so plugins see a file close once, at `:bd` or exit.
+Each file carries a stable `number` (also `file.number` in Lua) and the
+cursor of the last window that showed it, restored when it is shown
+again.
+
+    :ls              number, % current, a shown or h hidden, + modified, name
+    :b N | :b name   show that buffer here (exact path or name, or a unique substring)
+    :bd[!] [buffer]  delete it; its windows move to another buffer
+    :recover[!]      load this file's journal, or drop it
+
+`:e other` and `:b` hide the current file; `:q` closes the window and
+hides its file, and on the last window it is the exit, which refuses
+while any file is modified; `:qall` refuses likewise, naming the file,
+and `:qall!` (or `:q!` on the last window) exits and drops the
+journals. `:q!` on a window that is not the last only hides the file;
+`:bd!` is the way to throw a modified buffer away.
+
+The recovery journal, `vis-recovery.c`: a named file whose text changed
+since the last journal is written whole to
+`$XDG_STATE_HOME/vis/recovery/<path with / as %>` (temporary file and
+rename) every time the editor takes its undo snapshot, which is on the
+return to NORMAL and on insert idle, so a crash loses at most the
+current edit burst. Files above 8 MiB are skipped. The journal goes when
+the file is saved, when undo brings it back to the saved state, when an
+unmodified file is freed, and on an explicit discard (`:e!`, `:bd!`,
+`:qall!`); a `vis_die` exit (SIGTERM, SIGHUP, a mainloop error) keeps
+it. Opening a file that has a journal says so on the info line;
+`:recover` replaces the text with the journal, leaving the file modified
+for `:w`. Unnamed files are not journaled.
 
 ## LSP
 

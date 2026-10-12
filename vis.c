@@ -22,6 +22,7 @@
 #include "vis-motions.c"
 #include "vis-operators.c"
 #include "vis-prompt.c"
+#include "vis-recovery.c"
 #include "vis-registers.c"
 #include "vis-subprocess.c"
 #include "vis-text-objects.c"
@@ -44,14 +45,18 @@ vis_file_set_name_relative(File *file, str8 directory)
 	file->name = name;
 }
 
+/* Free a file whatever its refcount; windows release theirs through
+ * vis_file_unref. The recovery journal goes with it unless the file is
+ * modified and the exit is not an explicit discard. */
 VIS_INTERNAL void
 vis_file_free(Vis *vis, File *file)
 {
-	if (file && file->refcount > 1) {
-		file->refcount--;
-	} else if (file) {
-		if (!file->internal)
+	if (file) {
+		if (!file->internal) {
+			if (!text_modified(file->text) || vis->discard_recovery)
+				vis_recovery_remove(vis, file);
 			vis_event_emit(vis, VIS_EVENT_FILE_CLOSE, file);
+		}
 
 		if (file->prev) file->prev->next = file->next;
 		if (file->next) file->next->prev = file->prev;
@@ -67,6 +72,85 @@ vis_file_free(Vis *vis, File *file)
 	}
 }
 
+/* A window let go of the file. Internal files go when nothing shows
+ * them; any other file stays in the list as a hidden buffer until
+ * vis_file_free (:bd, exit), see doc/adr/0001. */
+VIS_INTERNAL void
+vis_file_unref(Vis *vis, File *file)
+{
+	if (!file)
+		return;
+	if (file->refcount > 0)
+		file->refcount--;
+	if (file->internal && file->refcount == 0)
+		vis_file_free(vis, file);
+}
+
+/* Drop a file with its unsaved changes on purpose: the journal goes too. */
+VIS_INTERNAL void
+vis_file_discard(Vis *vis, File *file)
+{
+	if (!file)
+		return;
+	if (!file->internal)
+		vis_recovery_remove(vis, file);
+	vis_file_free(vis, file);
+}
+
+VIS_INTERNAL File *
+vis_files_modified(Vis *vis)
+{
+	for (File *file = vis->files; file; file = file->next) {
+		if (!file->internal && text_modified(file->text))
+			return file;
+	}
+	return NULL;
+}
+
+/* A buffer by its :ls number, its exact path or name, or a substring of
+ * the name that matches one file only. */
+VIS_INTERNAL File *
+vis_file_lookup(Vis *vis, const char *spec)
+{
+	if (!spec || !*spec)
+		return NULL;
+	char *end;
+	long number = strtol(spec, &end, 10);
+	if (*end == '\0') {
+		for (File *file = vis->files; file; file = file->next) {
+			if (!file->internal && file->number == number)
+				return file;
+		}
+		return NULL;
+	}
+	str8 want = str8_from_c_str(spec);
+	File *partial = NULL;
+	int partials = 0;
+	for (File *file = vis->files; file; file = file->next) {
+		if (file->internal || file->filepath.length == 0)
+			continue;
+		if (str8_equal(file->filepath, want) || str8_equal(file->name, want))
+			return file;
+		/* name is a suffix slice of the 0-terminated filepath */
+		if (strstr((char *)file->name.data, spec)) {
+			partial = file;
+			partials++;
+		}
+	}
+	return partials == 1 ? partial : NULL;
+}
+
+VIS_INTERNAL int
+vis_windows_count(Vis *vis)
+{
+	int count = 0;
+	for (Win *win = vis->windows; win; win = win->next) {
+		if (!win->file->internal)
+			count++;
+	}
+	return count;
+}
+
 typedef enum {
 	VisFileNewFlag_Internal   = (1 << 0),
 	VisFileNewFlag_ForceNew   = (1 << 1),
@@ -76,7 +160,14 @@ typedef enum {
 static void
 vis_text_changed(void *ctx, Text *txt, size_t pos, size_t deleted, const char *inserted, size_t inserted_len)
 {
-	vis_event_emit(ctx, VIS_EVENT_TEXT_CHANGED, txt, pos, deleted, inserted, inserted_len);
+	Vis *vis = ctx;
+	for (File *file = vis->files; file; file = file->next) {
+		if (file->text == txt) {
+			file->recovery_dirty = true;
+			break;
+		}
+	}
+	vis_event_emit(vis, VIS_EVENT_TEXT_CHANGED, txt, pos, deleted, inserted, inserted_len);
 }
 
 VIS_INTERNAL File *
@@ -118,6 +209,7 @@ vis_file_new(Vis *vis, const char *name, VisFileNewFlags flags)
 			result->refcount = (flags & VisFileNewFlag_NoRefcount) ? 0 : 1;
 			result->filepath = filepath;
 			result->internal = (flags & VisFileNewFlag_Internal) != 0;
+			result->number   = result->internal ? 0 : ++vis->file_counter;
 
 			result->next = vis->files;
 			if (vis->files)
@@ -130,6 +222,9 @@ vis_file_new(Vis *vis, const char *name, VisFileNewFlags flags)
 			if (!result->internal) {
 				text_on_change(text, vis_text_changed, vis);
 				vis_event_emit(vis, VIS_EVENT_FILE_OPEN, result);
+				if (vis_recovery_exists(vis, result))
+					vis_info_show(vis, "Journaled changes exist for %.*s: :recover loads them, :recover! drops them",
+					              (int)result->name.length, result->name.data);
 			}
 		}
 
@@ -445,6 +540,8 @@ Win *window_new_file(Vis *vis, File *file, enum UiOption options) {
 
 	file->refcount++;
 	win_options_set(win, win->options);
+	if (file->last_pos)
+		view_cursors_to(win->view.selection, file->last_pos);
 
 	vis_window_focus(vis, win);
 
@@ -463,7 +560,7 @@ vis_window_file_reload(Vis *vis, Win *win)
 		File *file = vis_file_new(vis, (char *)path.data, VisFileNewFlag_ForceNew);
 		result = file != 0;
 		if (result) {
-			vis_file_free(vis, win->file);
+			vis_file_discard(vis, win->file);
 			win->file = file;
 			view_reload(&win->view, file->text);
 		}
@@ -476,7 +573,8 @@ vis_window_file_change(Vis *vis, Win *win, const char *filename)
 {
 	File *file = vis_file_new(vis, filename, 0);
 	if (file) {
-		vis_file_free(vis, win->file);
+		win->file->last_pos = view_cursor_get(&win->view);
+		vis_file_unref(vis, win->file);
 		win->file = file;
 		view_reload(&win->view, file->text);
 	}
@@ -555,10 +653,31 @@ bool vis_window_new_fd(Vis *vis, int fd) {
 	return true;
 }
 
-bool vis_window_closable(Win *win) {
-	if (!win || !text_modified(win->file->text))
+/* Make win show file: a fresh window for it takes win's place in the
+ * layout and win goes, its file staying as a hidden buffer. A NULL file
+ * means a new empty one. The new window gets WIN_OPEN like any other, so
+ * syntax and options follow the file. */
+VIS_INTERNAL bool
+vis_window_show_file(Vis *vis, Win *win, File *file)
+{
+	if (!win)
+		return false;
+	if (file && win->file == file) {
+		vis_window_focus(vis, win);
 		return true;
-	return win->file->refcount > 1;
+	}
+	if (!file) {
+		if (!vis_window_new(vis, NULL))
+			return false;
+	} else if (!window_new_file(vis, file, UI_OPTION_STATUSBAR|UI_OPTION_SYMBOL_EOF)) {
+		return false;
+	}
+	Win *newwin = vis->win;
+	vis_window_swap(win, newwin);
+	vis_window_close(win);
+	vis_window_focus(vis, newwin);
+	vis->ui.doupdate = true;
+	return true;
 }
 
 void vis_window_swap(Win *a, Win *b) {
@@ -594,7 +713,13 @@ void vis_window_close(Win *win) {
 		return;
 	Vis *vis = win->vis;
 	vis_event_emit(vis, VIS_EVENT_WIN_CLOSE, win);
-	vis_file_free(vis, win->file);
+	File *file = win->file;
+	file->last_pos = view_cursor_get(&win->view);
+	if (!file->internal && file->refcount <= 1 && file->filepath.length == 0 &&
+	    !text_modified(file->text))
+		vis_file_free(vis, file); /* an unnamed, untouched file leaves nothing to keep */
+	else
+		vis_file_unref(vis, file);
 	if (win->prev)
 		win->prev->next = win->next;
 	if (win->next)
@@ -676,6 +801,11 @@ void vis_cleanup(Vis *vis)
 	// the release of those files.
 	vis_event_emit(vis, VIS_EVENT_QUIT);
 
+	for (File *next, *file = vis->files; file; file = next) {
+		next = file->next;
+		if (!file->internal)
+			vis_file_free(vis, file);
+	}
 	vis_file_free(vis, vis->prompt_file);
 	vis_file_free(vis, vis->error_file);
 
@@ -2037,8 +2167,10 @@ bool vis_cmd(Vis *vis, const char *cmdline) {
 }
 
 void vis_file_snapshot(Vis *vis, File *file) {
-	if (!vis->replaying)
-		text_snapshot(file->text);
+	if (vis->replaying)
+		return;
+	text_snapshot(file->text);
+	vis_recovery_write(vis, file);
 }
 
 Text *vis_text(Vis *vis) {

@@ -1221,10 +1221,32 @@ split window into rows (horizontally)
 split window into columns (vertically)
 .
 .It Ic :q Ns Oo Cm \&! Oc Op Ar exit code
-close currently focused window
+close currently focused window; its file stays as a hidden buffer.
+On the last window this is the exit, refused while any file is modified
+unless forced
 .
 .It Ic :qall Ns Oo Cm \&! Oc Op Ar exit code
-close all windows, terminate editor with exit code (defaults to 0)
+close all windows, terminate editor with exit code (defaults to 0);
+refused while any file is modified unless forced, in which case the
+recovery journals are dropped too
+.
+.It Ic :ls
+list buffers: number, flags
+.Pq Cm % current , Cm a shown , Cm h hidden , Cm + modified
+and name
+.
+.It Ic :b Op Ar number | name
+show that buffer in the current window; without argument, list them
+.
+.It Ic :bd Ns Oo Cm \&! Oc Op Ar number | name
+delete a buffer, the current window's by default; windows showing it
+move to another buffer. A modified buffer needs the force
+.
+.It Ic :recover Ns Op Cm \&!
+load the recovery journal of the current file, written on every undo
+snapshot of a modified file to
+.Pa $XDG_STATE_HOME/vis/recovery ;
+forced, drop the journal instead
 .El
 .Pp
 Commands taking a file name will invoke the

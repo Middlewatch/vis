@@ -2478,8 +2478,9 @@ static int window_close(lua_State *L) {
 		if (!w->file->internal)
 			count++;
 	}
-	bool force = lua_isboolean(L, 2) && lua_toboolean(L, 2);
-	bool close = count > 1 && (force || vis_window_closable(win));
+	/* closing never loses the file: it stays as a hidden buffer, so force
+	 * is accepted for compatibility and changes nothing */
+	bool close = count > 1;
 	if (close)
 		vis_window_close(win);
 	lua_pushboolean(L, close);
@@ -2808,6 +2809,7 @@ static const struct luaL_Reg window_selection_funcs[] = {
 /***
  * File path.
  * @tfield string path the absolute file path or `nil` if not yet named
+ * @tfield int number the buffer number shown by `:ls`, stable for the session
  */
 /***
  * File content by logical lines.
@@ -2862,6 +2864,11 @@ static int file_index(lua_State *L) {
 
 		if (strcmp(key, "size") == 0) {
 			lua_pushinteger(L, text_size(file->text));
+			return 1;
+		}
+
+		if (strcmp(key, "number") == 0) {
+			lua_pushinteger(L, file->number);
 			return 1;
 		}
 

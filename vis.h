@@ -226,11 +226,6 @@ VIS_EXPORT bool vis_window_file_reload(Vis *, Win *);
  */
 VIS_EXPORT bool vis_window_file_change(Vis *, Win *, const char *filename);
 /**
- * Check whether closing the window would loose unsaved changes.
- * @param win The window to check.
- */
-VIS_EXPORT bool vis_window_closable(Win*);
-/**
  * Close window, redraw user interface.
  * @param win The window to close.
  */
