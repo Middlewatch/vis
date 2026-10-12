@@ -157,9 +157,11 @@ static bool cmd_set(Vis *vis, Win *win, Command *cmd, const char *argv[], Select
 static bool is_file_pattern(const char *pattern) {
 	if (!pattern)
 		return false;
+	/* an existing name is literal, whatever characters it holds; only a
+	 * directory is a pattern (its listing); a missing one may be a glob */
 	struct stat meta;
-	if (stat(pattern, &meta) == 0 && S_ISDIR(meta.st_mode))
-		return true;
+	if (stat(pattern, &meta) == 0)
+		return S_ISDIR(meta.st_mode);
 	/* tilde expansion is defined only for the tilde at the
 	   beginning of the pattern. */
 	if (pattern[0] == '~')

@@ -24,6 +24,19 @@ describe("buffers", function()
 		assert.truthy(vis.win.file.number ~= before)
 	end)
 
+	it(":e of an existing file with shell characters opens it literally", function()
+		local dir = os.tmpname()
+		os.remove(dir)
+		os.execute("mkdir -p '" .. dir .. "'")
+		local evil = dir .. "/x$(touch${IFS}owned)y.txt"
+		local f = io.open(evil, "w"); f:write("x\n"); f:close()
+		assert.truthy(vis:command('e "' .. evil:gsub('[\\"]', '\\%0') .. '"'))
+		assert.are.equal(evil, vis.win.file.path)
+		assert.are.equal(nil, io.open("owned")) -- would land in the cwd
+		os.remove("owned")
+		os.execute("rm -r '" .. dir .. "'")
+	end)
+
 	it(":b is rejected inside a command group", function()
 		assert.falsy(vis:command("{\nb 1\np\n}"))
 	end)
