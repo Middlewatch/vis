@@ -336,6 +336,7 @@ VIS_INTERNAL void mode_set(Vis *vis, Mode *new_mode);
 VIS_INTERNAL Macro *macro_get(Vis *vis, enum VisRegister);
 
 VIS_INTERNAL Win *window_new_file(Vis*, File*, enum UiOption);
+VIS_INTERNAL bool vis_window_new_scratch(Vis*);
 /* file lifecycle: a file outlives its windows, see doc/adr/0001 */
 VIS_INTERNAL void  vis_file_free(Vis*, File*);
 VIS_INTERNAL void  vis_file_unref(Vis*, File*);

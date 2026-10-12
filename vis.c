@@ -656,6 +656,22 @@ vis_window_new(Vis *vis, const char *filename)
 	return file != 0;
 }
 
+/* A window on an internal scratch file for generated text (:ls, :help):
+ * it takes no buffer number, is not journaled, and goes with the window. */
+VIS_INTERNAL bool
+vis_window_new_scratch(Vis *vis)
+{
+	File *file = vis_file_new(vis, NULL, VisFileNewFlag_Internal|VisFileNewFlag_NoRefcount);
+	if (!file)
+		return false;
+	if (!window_new_file(vis, file, UI_OPTION_STATUSBAR|UI_OPTION_SYMBOL_EOF)) {
+		vis_file_free(vis, file);
+		return false;
+	}
+	vis->ui.doupdate = true;
+	return true;
+}
+
 bool vis_window_new_fd(Vis *vis, int fd) {
 	if (fd == -1)
 		return false;

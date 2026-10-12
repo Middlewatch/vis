@@ -346,7 +346,7 @@ vis_cmd_qall(Vis *vis, Win *win, Command *cmd, const char *argv[], Selection *se
  * modified, then the name. The listing's own window is left out. */
 static bool cmd_ls(Vis *vis, Win *win, Command *cmd, const char *argv[], Selection *sel, Filerange *range) {
 	File *current = win ? win->file : NULL;
-	if (!vis_window_new(vis, NULL))
+	if (!vis_window_new_scratch(vis))
 		return false;
 	Text *txt = vis->win->file->text;
 	for (int n = 1; n <= vis->file_counter; n++) {
@@ -738,7 +738,7 @@ static void print_symbolic_keys(Vis *vis, Text *txt)
 }
 
 static bool cmd_help(Vis *vis, Win *win, Command *cmd, const char *argv[], Selection *sel, Filerange *range) {
-	if (!vis_window_new(vis, NULL))
+	if (!vis_window_new_scratch(vis))
 		return false;
 
 	Text *txt = vis->win->file->text;

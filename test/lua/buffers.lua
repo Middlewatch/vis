@@ -37,6 +37,17 @@ describe("buffers", function()
 		os.execute("rm -r '" .. dir .. "'")
 	end)
 
+	it(":ls takes no buffer number", function()
+		local max = 0
+		for f in vis:files() do if f.number > max then max = f.number end end
+		assert.truthy(vis:command("ls"))
+		assert.are.equal(0, vis.win.file.number)
+		assert.truthy(vis.win.file.size > 0)
+		vis:command("q")
+		vis:command("open")
+		assert.are.equal(max + 1, vis.win.file.number)
+	end)
+
 	it(":b is rejected inside a command group", function()
 		assert.falsy(vis:command("{\nb 1\np\n}"))
 	end)
