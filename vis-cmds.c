@@ -442,6 +442,14 @@ static bool cmd_recover(Vis *vis, Win *win, Command *cmd, const char *argv[], Se
 		vis_info_show(vis, "Could not read the journal: %s", strerror(errno));
 		return false;
 	}
+	/* the whole text was replaced, so every cursor mark on it is gone */
+	for (Win *w = vis->windows; w; w = w->next) {
+		if (w->file == file) {
+			view_selections_clear_all(&w->view);
+			view_cursors_to(w->view.selection, 0);
+			vis_window_invalidate(w);
+		}
+	}
 	vis_info_show(vis, "Journal loaded; :w keeps it, :e! drops it");
 	return true;
 }
