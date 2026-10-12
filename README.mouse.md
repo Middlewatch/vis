@@ -331,15 +331,20 @@ journals. `:q!` on a window that is not the last only hides the file;
 The recovery journal, `vis-recovery.c`: a named file whose text changed
 since the last journal is written whole to
 `$XDG_STATE_HOME/vis/recovery/<path with / as %>` (temporary file and
-rename) every time the editor takes its undo snapshot, which is on the
-return to NORMAL and on insert idle, so a crash loses at most the
-current edit burst. Files above 8 MiB are skipped. The journal goes when
-the file is saved, when undo brings it back to the saved state, when an
-unmodified file is freed, and on an explicit discard (`:e!`, `:bd!`,
-`:qall!`); a `vis_die` exit (SIGTERM, SIGHUP, a mainloop error) keeps
-it. Opening a file that has a journal says so on the info line;
-`:recover` replaces the text with the journal, leaving the file modified
-for `:w`. Unnamed files are not journaled.
+rename through `mkstemp`) every time the editor takes its undo
+snapshot, which is on the return to NORMAL and on insert idle, and
+right after undo, redo, `:earlier` and `:later`, so a crash loses at
+most the current edit burst. Files above 8 MiB are skipped. The journal
+goes when the file is saved, when undo brings it back to the saved
+state, when an unmodified file is freed, and on an explicit discard
+(`:e!`, `:bd!`, `:qall!`); a `vis_die` exit (SIGTERM, SIGHUP, a
+mainloop error) keeps it. Opening a file that has a journal says so on
+the info line, and that journal is an earlier session's: no snapshot
+rewrites it and no clean exit removes it until `:recover` replaces the
+text with it (leaving the file modified for `:w`), `:recover!` drops it,
+or a save supersedes it; edits made before that choice are not
+journaled. Unnamed files are not journaled, and the `:ls` and `:help`
+windows are internal scratch files with no number and no journal.
 
 ## LSP
 
