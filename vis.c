@@ -633,10 +633,13 @@ vis_redraw(Vis *vis)
 VIS_EXPORT bool
 vis_window_new(Vis *vis, const char *filename)
 {
+	File *head = vis->files;
 	File *file = vis_file_new(vis, filename, VisFileNewFlag_NoRefcount);
 	if (file) {
 		if (!window_new_file(vis, file, UI_OPTION_STATUSBAR|UI_OPTION_SYMBOL_EOF)) {
-			vis_file_free(vis, file);
+			/* only a file created here goes; a deduplicated one is shared */
+			if (file == vis->files && file != head)
+				vis_file_free(vis, file);
 			file = 0;
 		}
 		vis->ui.doupdate = true;
