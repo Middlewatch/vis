@@ -6,6 +6,9 @@
 /* Pool of information about currently running subprocesses */
 static Process *process_pool;
 
+/* how long a released process gets to exit after SIGTERM before SIGKILL */
+#define PROCESS_TERM_GRACE_MS 1000
+
 /**
  * Adds new empty process information structure to the process pool and
  * returns it
@@ -262,6 +265,13 @@ static bool wait_or_kill_process(Vis *vis, Process *current) {
 
 kill_and_destroy:
 	kill(current->pid, SIGTERM);
+	for (int waited = 0; waited < PROCESS_TERM_GRACE_MS; waited += 10) {
+		if (waitpid(current->pid, &status, WNOHANG) != 0)
+			goto just_destroy;
+		nanosleep(&(struct timespec){ .tv_nsec = 10 * 1000000 }, NULL);
+	}
+	/* a child that ignores SIGTERM must not hang the editor on exit */
+	kill(current->pid, SIGKILL);
 	waitpid(current->pid, &status, 0);
 just_destroy:
 	if (WIFSIGNALED(status)) {

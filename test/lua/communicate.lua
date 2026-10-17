@@ -20,6 +20,17 @@ describe("vis.communicate", function()
 		p:close()
 	end)
 
+	it("a child that ignores SIGTERM does not block exit", function()
+		-- the shell ignores SIGTERM; vis kills it after a grace period when
+		-- it quits, else this test file never finishes. The sleep ends on
+		-- its own, so no orphan is left behind.
+		local p = vis:communicate("stubborn", "trap '' TERM; while :; do sleep 1; done")
+		assert.truthy(p)
+		-- give the shell time to install the trap before the kill
+		os.execute("sleep 0.3")
+		assert.truthy(p:close())
+	end)
+
 	it("a closed handle rejects writes", function()
 		local p = vis:communicate("closed", "cat > /dev/null")
 		assert.truthy(p:close())
