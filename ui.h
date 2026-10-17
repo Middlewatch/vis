@@ -211,6 +211,7 @@ VIS_INTERNAL int  ui_terminal_colors(void);
 VIS_INTERNAL void ui_terminal_free(Ui*);
 VIS_INTERNAL void ui_terminal_restore(Ui*);
 VIS_INTERNAL void ui_terminal_resume(Ui*);
+VIS_INTERNAL void ui_terminal_paste_mode(bool enable);
 VIS_INTERNAL void ui_terminal_save(Ui*, bool fscr);
 VIS_INTERNAL void ui_terminal_suspend(Ui*);
 

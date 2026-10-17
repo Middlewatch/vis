@@ -1470,6 +1470,95 @@ void vis_keys_feed(Vis *vis, const char *input) {
 	buffer_release(&macro);
 }
 
+/* the bytes the terminal sent for a key, as far as pasted text can hold
+ * them: termkey has already turned the paste into keys */
+static size_t paste_key_bytes(const TermKeyKey *key, char out[8]) {
+	size_t n = 0;
+	if (key->modifiers & TERMKEY_KEYMOD_ALT)
+		out[n++] = 0x1b;
+	switch (key->type) {
+	case TERMKEY_TYPE_UNICODE:
+		if (key->modifiers & TERMKEY_KEYMOD_CTRL) {
+			out[n++] = key->code.codepoint & 0x1f;
+		} else {
+			size_t len = strlen((const char *)key->utf8);
+			memcpy(out + n, key->utf8, len);
+			n += len;
+		}
+		break;
+	case TERMKEY_TYPE_KEYSYM:
+		switch (key->code.sym) {
+		case TERMKEY_SYM_ENTER:     out[n++] = '\n'; break;
+		case TERMKEY_SYM_TAB:       out[n++] = '\t'; break;
+		case TERMKEY_SYM_ESCAPE:    out[n++] = 0x1b; break;
+		case TERMKEY_SYM_BACKSPACE: out[n++] = '\b'; break;
+		case TERMKEY_SYM_DEL:       out[n++] = 0x7f; break;
+		case TERMKEY_SYM_SPACE:     out[n++] = ' ';  break;
+		default: return 0;
+		}
+		break;
+	default: /* mouse, function keys: not text */
+		return 0;
+	}
+	return n;
+}
+
+/* the next key of a paste in progress, waiting for the terminal to send
+ * the rest; a paste that stops arriving ends where it stopped */
+static bool paste_getkey(Vis *vis, TermKeyKey *key) {
+	TermKey *termkey = &vis->ui.termkey;
+	for (;;) {
+		TermKeyResult ret = termkey_getkey(termkey, key);
+		if (ret == TERMKEY_RES_KEY)
+			return true;
+		if (ret != TERMKEY_RES_NONE && ret != TERMKEY_RES_AGAIN)
+			return false;
+		struct pollfd fd = { .fd = STDIN_FILENO, .events = POLLIN };
+		if (poll(&fd, 1, 1000) <= 0)
+			return ret == TERMKEY_RES_AGAIN &&
+			       termkey_getkey_force(termkey, key) == TERMKEY_RES_KEY;
+		if (termkey_advisereadable(termkey) == TERMKEY_RES_ERROR)
+			return false;
+	}
+}
+
+static bool paste_end(TermKey *termkey, TermKeyKey *key) {
+	long args[16];
+	size_t nargs;
+	unsigned long cmd;
+	return termkey_interpret_csi(termkey, key, args, &nargs, &cmd) == TERMKEY_RES_KEY &&
+	       cmd == '~' && nargs == 1 && args[0] == 201;
+}
+
+/* a bracketed paste: collect the keys up to CSI 201~ and insert the text
+ * as one change at every cursor. Typing it key by key would run it as
+ * commands outside insert mode, redraw per character and send a language
+ * server one change per character. The text is not recorded in macros. */
+static void paste_collect(Vis *vis) {
+	TermKey *termkey = &vis->ui.termkey;
+	Buffer text = {0};
+	TermKeyKey key;
+	while (paste_getkey(vis, &key)) {
+		if (key.type == TERMKEY_TYPE_UNKNOWN_CSI) {
+			if (paste_end(termkey, &key))
+				break;
+			continue;
+		}
+		char bytes[8];
+		size_t len = paste_key_bytes(&key, bytes);
+		if (len > 0)
+			buffer_append(&text, bytes, len);
+	}
+	if (text.length > 0 && vis->win) {
+		vis_ui_info_hide(&vis->ui);
+		if (vis->mode->id == VIS_MODE_REPLACE)
+			vis_replace_key(vis, text.data, text.length);
+		else
+			vis_insert_key(vis, text.data, text.length);
+	}
+	buffer_release(&text);
+}
+
 static const char *getkey(Vis *vis) {
 	TermKeyKey key = { 0 };
 	if (!vis_ui_getkey(vis, &key))
@@ -1494,6 +1583,10 @@ static const char *getkey(Vis *vis) {
 		size_t nargs;
 		unsigned long cmd;
 		if (termkey_interpret_csi(termkey, &key, &args[2], &nargs, &cmd) == TERMKEY_RES_KEY) {
+			if (cmd == '~' && nargs == 1 && args[2] == 200) {
+				paste_collect(vis);
+				return getkey(vis);
+			}
 			args[0] = (long)cmd;
 			args[1] = nargs;
 			vis_event_emit(vis, VIS_EVENT_TERM_CSI, args);
@@ -1620,6 +1713,7 @@ int vis_run(Vis *vis) {
 
 		if (vis->resume) {
 			ui_terminal_resume(&vis->ui);
+			ui_terminal_paste_mode(true);
 			vis->resume = false;
 			vis_event_emit(vis, VIS_EVENT_UI_RESUME);
 		}

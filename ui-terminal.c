@@ -722,7 +722,29 @@ vis_ui_termkey_reopen(Ui *ui, int fd, char *term)
 	return result;
 }
 
+/* bracketed paste: the terminal frames pasted text in CSI 200~ and CSI 201~
+ * and getkey in vis.c inserts it as one change. Both backends draw on
+ * stderr, so the mode switch goes there too; a redirected stderr is not a
+ * terminal and gets nothing. */
+void ui_terminal_paste_mode(bool enable) {
+	if (!isatty(STDERR_FILENO))
+		return;
+	const char *seq = enable ? "\x1b[?2004h" : "\x1b[?2004l";
+	size_t len = strlen(seq);
+	while (len > 0) {
+		ssize_t n = write(STDERR_FILENO, seq, len);
+		if (n <= 0) {
+			if (n == -1 && errno == EINTR)
+				continue;
+			break;
+		}
+		seq += n;
+		len -= n;
+	}
+}
+
 void ui_terminal_suspend(Ui *tui) {
+	ui_terminal_paste_mode(false);
 	ui_term_backend_suspend(tui);
 	/* vis catches SIGTSTP to run vis_suspend first; our own stop must bypass
 	 * that handler and the block mask, or it would only set the flag again */
@@ -763,6 +785,7 @@ vis_ui_getkey(Vis *vis, TermKeyKey *key)
 }
 
 void ui_terminal_save(Ui *tui, bool fscr) {
+	ui_terminal_paste_mode(false);
 	ui_term_backend_save(tui, fscr);
 	termkey_stop(&tui->termkey);
 }
@@ -770,11 +793,13 @@ void ui_terminal_save(Ui *tui, bool fscr) {
 void ui_terminal_restore(Ui *tui) {
 	termkey_start(&tui->termkey, UI_TERMKEY_FLAGS);
 	ui_term_backend_restore(tui);
+	ui_terminal_paste_mode(true);
 }
 
 VIS_INTERNAL void
 ui_terminal_free(Ui *tui)
 {
+	ui_terminal_paste_mode(false);
 	vis_ui_backend_free(tui);
 	termkey_destroy(&tui->termkey);
 	if (tui->cell_buffer.size) munmap(tui->cell_buffer.cells, tui->cell_buffer.size);
@@ -809,6 +834,7 @@ ui_init(Ui *tui)
 	bool result = tui->term.length && ui_backend_init(tui, term);
 	if (result) ui_resize(tui);
 	else        ui_terminal_free(tui);
+	if (result) ui_terminal_paste_mode(true);
 
 	if (result) {
 		VisCellStyle default_style = vis_ui_backend_style_default(tui);
