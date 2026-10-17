@@ -1582,8 +1582,9 @@ int vis_run(Vis *vis) {
 	sigsetjmp(vis->sigbus_jmpbuf, 1);
 
 	while (vis->running) {
-		fd_set fds;
+		fd_set fds, wfds;
 		FD_ZERO(&fds);
+		FD_ZERO(&wfds);
 		FD_SET(STDIN_FILENO, &fds);
 
 		if (vis->sigbus) {
@@ -1630,7 +1631,7 @@ int vis_run(Vis *vis) {
 
 		ui_draw(vis);
 		idle.tv_sec = vis->mode->idle_timeout;
-		int r = pselect(vis_process_before_tick(&fds) + 1, &fds, NULL, NULL,
+		int r = pselect(vis_process_before_tick(&fds, &wfds) + 1, &fds, &wfds, NULL,
 		                timeout, &emptyset);
 		if (r == -1 && errno == EINTR)
 			continue;
@@ -1639,7 +1640,7 @@ int vis_run(Vis *vis) {
 			/* TODO save all pending changes to a ~suffixed file */
 			vis_die(vis, "Error in mainloop: %s\n", strerror(errno));
 		}
-		vis_process_tick(vis, &fds);
+		vis_process_tick(vis, &fds, &wfds);
 
 		if (!FD_ISSET(STDIN_FILENO, &fds)) {
 			if (vis->mode->idle)

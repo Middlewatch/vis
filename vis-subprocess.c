@@ -12,7 +12,7 @@ static Process *process_pool;
  * @return a new Process instance
  */
 static Process *new_process_in_pool(void) {
-	Process *newprocess = malloc(sizeof(Process));
+	Process *newprocess = calloc(1, sizeof(Process));
 	if (!newprocess) {
 		return NULL;
 	}
@@ -37,9 +37,10 @@ static Process *destroy_process(Process *target) {
 	if (target->inpfd != -1) {
 		close(target->inpfd);
 	}
-	/* marking stream as closed for lua */
-	if (target->invalidator) {
-		*(target->invalidator) = NULL;
+	buffer_release(&target->input);
+	/* marking the handle as closed for lua */
+	if (target->owner) {
+		*(target->owner) = NULL;
 	}
 	Process *next = target->next;
 	free(target->name);
@@ -59,13 +60,12 @@ static Process *destroy_process(Process *target) {
  * This name will be passed to the PROCESS_RESPONSE event handler
  * to distinguish running subprocesses.
  * @param command a command to be executed to spawn a process
- * @param invalidator a pointer to the pointer which shows that the subprocess
- * is invalid when set to NULL. When the subprocess dies, it is set to NULL.
- * If a caller sets the pointer to NULL the subprocess will be killed on the
- * next main loop iteration.
+ * @param owner the handle's pointer to the process; it is set to NULL when
+ * the process dies. vis_process_release drops the handle and has the
+ * process killed on the next main loop iteration.
  */
 Process *vis_process_communicate(Vis *vis, const char *name,
-                                 const char *command, Invalidator **invalidator) {
+                                 const char *command, Process **owner) {
 	int pin[2], pout[2], perr[2];
 	pid_t pid = (pid_t)-1;
 	if (pipe(perr) == -1) {
@@ -108,7 +108,11 @@ Process *vis_process_communicate(Vis *vis, const char *name,
 		new->errfd = perr[0];
 		new->inpfd = pin[1];
 		new->pid = pid;
-		new->invalidator = invalidator;
+		new->owner = owner;
+		/* writes go through the queue so the editor never waits on a child
+		 * that has stopped reading, which a language server does whenever
+		 * its own output pipe to us is full */
+		fcntl(new->inpfd, F_SETFL, fcntl(new->inpfd, F_GETFL) | O_NONBLOCK);
 		close(pin[0]);
 		close(pout[1]);
 		close(perr[1]);
@@ -134,13 +138,73 @@ closeerr:
 }
 
 /**
- * Adds file descriptors of currently running subprocesses to the `readfds`
- * to track their readiness and returns maximum file descriptor value
- * to pass it to the `pselect` call
- * @param readfds the structure for `pselect` call to fill
- * @return maximum file descriptor number in the readfds structure
+ * Writes as much of the queued input as the pipe accepts right now.
+ * A failed write closes the pipe; the queue is dropped with it.
+ * @param current the process whose queue to flush
  */
-int vis_process_before_tick(fd_set *readfds) {
+static void flush_input(Process *current) {
+	while (current->inpfd != -1 && current->input.length > 0) {
+		ssize_t written = write(current->inpfd, current->input.data, current->input.length);
+		if (written > 0) {
+			buffer_remove(&current->input, 0, written);
+		} else if (written == -1 && errno == EINTR) {
+			continue;
+		} else if (written == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+			break;
+		} else {
+			close(current->inpfd);
+			current->inpfd = -1;
+			buffer_release(&current->input);
+		}
+	}
+}
+
+/**
+ * Queues data for the subprocess's stdin and sends what fits at once;
+ * the rest goes out from the main loop as the pipe drains.
+ * @param current the process to write to
+ * @param data the bytes to send
+ * @param len the number of bytes
+ * @return false if the pipe is closed, which a failed write also causes
+ */
+bool vis_process_write(Process *current, const char *data, size_t len) {
+	if (current->inpfd == -1)
+		return false;
+	if (!buffer_append(&current->input, data, len))
+		return false;
+	flush_input(current);
+	return current->inpfd != -1;
+}
+
+/**
+ * Drops the handle's reference: sends what is still queued if the pipe
+ * takes it, closes the process's stdin and marks it to be killed on the
+ * next main loop iteration.
+ * @param current the process to release, NULL if it already died
+ */
+void vis_process_release(Process *current) {
+	if (!current)
+		return;
+	flush_input(current);
+	if (current->inpfd != -1) {
+		close(current->inpfd);
+		current->inpfd = -1;
+	}
+	buffer_release(&current->input);
+	current->owner = NULL;
+	current->release = true;
+}
+
+/**
+ * Adds file descriptors of currently running subprocesses to the `readfds`
+ * and, for those with queued input, to the `writefds`, to track their
+ * readiness, and returns the maximum file descriptor value to pass it to
+ * the `pselect` call
+ * @param readfds the structure for `pselect` call to fill
+ * @param writefds the structure for `pselect` call to fill
+ * @return maximum file descriptor number in the structures
+ */
+int vis_process_before_tick(fd_set *readfds, fd_set *writefds) {
 	int maxfd = 0;
 	for (Process **pointer = &process_pool; *pointer; pointer = &((*pointer)->next)) {
 		Process *current = *pointer;
@@ -151,6 +215,10 @@ int vis_process_before_tick(fd_set *readfds) {
 		if (current->errfd != -1) {
 			FD_SET(current->errfd, readfds);
 			maxfd = maxfd < current->errfd ? current->errfd : maxfd;
+		}
+		if (current->inpfd != -1 && current->input.length > 0) {
+			FD_SET(current->inpfd, writefds);
+			maxfd = maxfd < current->inpfd ? current->inpfd : maxfd;
 		}
 	}
 	return maxfd;
@@ -187,7 +255,7 @@ static bool wait_or_kill_process(Vis *vis, Process *current) {
 		vis_message_show(vis, strerror(errno));
 	} else if (wpid == current->pid) {
 		goto just_destroy;
-	} else if (!*(current->invalidator)) {
+	} else if (current->release) {
 		goto kill_and_destroy;
 	}
 	return false;
@@ -207,14 +275,19 @@ just_destroy:
 /**
  * Checks if `readfds` contains file descriptors of subprocesses from
  * the pool. If so, it reads their data and fires corresponding events.
- * Also checks if each subprocess from the pool is dead or needs to be
- * killed then raises an event or kills it if necessary.
+ * Queued input goes out to the processes whose stdin `writefds` reports
+ * writable. Also checks if each subprocess from the pool is dead or needs
+ * to be killed then raises an event or kills it if necessary.
  * @param vis the editor instance
  * @param readfds the structure for `pselect` call with file descriptors
+ * @param writefds the structure for `pselect` call with file descriptors
  */
-void vis_process_tick(Vis *vis, fd_set *readfds) {
+void vis_process_tick(Vis *vis, fd_set *readfds, fd_set *writefds) {
 	for (Process **pointer = &process_pool; *pointer; ) {
 		Process *current = *pointer;
+		if (current->inpfd != -1 && FD_ISSET(current->inpfd, writefds)) {
+			flush_input(current);
+		}
 		if (current->outfd != -1 && FD_ISSET(current->outfd, readfds)) {
 			read_and_fire(vis, current->outfd, current->name, STDOUT);
 		}

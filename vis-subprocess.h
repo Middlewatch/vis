@@ -4,11 +4,6 @@
 #include "vis-lua.h"
 
 typedef struct Process Process;
-#if CONFIG_LUA
-typedef int Invalidator(lua_State*);
-#else
-typedef void Invalidator;
-#endif
 
 struct Process {
 	char *name;
@@ -16,15 +11,19 @@ struct Process {
 	int errfd;
 	int inpfd;
 	pid_t pid;
-	Invalidator** invalidator;
+	Buffer input;    /* bytes queued for inpfd, written as the pipe accepts them */
+	Process **owner; /* the handle's pointer to this process, cleared when it is destroyed */
+	bool release;    /* the handle was closed: kill the process at the next tick */
 	Process *next;
 };
 
 typedef enum { STDOUT, STDERR, SIGNAL, EXIT } ResponseType;
 
-VIS_INTERNAL Process *vis_process_communicate(Vis *, const char *command, const char *name,
-                                              Invalidator **invalidator);
-VIS_INTERNAL int vis_process_before_tick(fd_set *);
-VIS_INTERNAL void vis_process_tick(Vis *, fd_set *);
+VIS_INTERNAL Process *vis_process_communicate(Vis *, const char *name, const char *command,
+                                              Process **owner);
+VIS_INTERNAL bool vis_process_write(Process *, const char *data, size_t len);
+VIS_INTERNAL void vis_process_release(Process *);
+VIS_INTERNAL int vis_process_before_tick(fd_set *readfds, fd_set *writefds);
+VIS_INTERNAL void vis_process_tick(Vis *, fd_set *readfds, fd_set *writefds);
 VIS_INTERNAL void vis_process_waitall(Vis *);
 #endif

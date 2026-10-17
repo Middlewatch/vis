@@ -28,6 +28,7 @@
 #define VIS_LUA_TYPE_SELECTION "selection"
 #define VIS_LUA_TYPE_SELECTIONS "selections"
 #define VIS_LUA_TYPE_KEYACTION "keyaction"
+#define VIS_LUA_TYPE_PROCESS "process"
 
 #ifndef DEBUG_LUA
 #define DEBUG_LUA 0
@@ -1597,55 +1598,31 @@ static int redraw(lua_State *L) {
 	return 0;
 }
 /***
- * Closes a stream returned by @{vis:communicate}.
- *
- * @function close
- * @tparam io.file inputfd the stream to be closed
- * @treturn bool identical to @{io.close}
- */
-static int close_subprocess(lua_State *L) {
-	luaL_Stream *file = luaL_checkudata(L, -1, "FILE*");
-	int result = fclose(file->f);
-	if (result == 0) {
-		file->f = NULL;
-		file->closef = NULL;
-	}
-	return luaL_fileresult(L, result == 0, NULL);
-}
-/***
- * Open new process and return its input stream (stdin).
- * If the stream is closed (by calling the close method or by being removed by a garbage collector)
+ * Open new process and return a handle to its stdin.
+ * If the handle is closed (by calling the close method or by being removed by a garbage collector)
  * the spawned process will be killed by SIGTERM.
  * When the process will quit or will output anything to stdout or stderr,
  * the @{process_response} event will be fired.
  *
- * The editor core won't be blocked while the external process is running.
+ * The editor core won't be blocked while the external process is running,
+ * nor by writing to it: data is queued and sent as the process reads.
  *
  * @function communicate
  * @tparam string name the name of subprocess (to distinguish processes in the @{process_response} event)
  * @tparam string command the command to execute
- * @return the file handle to write data to the process, in case of error the return values are equivalent to @{io.open} error values.
+ * @treturn Process the handle to write data to the process, in case of error the return values are equivalent to @{io.open} error values.
  */
 static int communicate_func(lua_State *L) {
-
-	typedef struct {
-		/* Lua stream structure for the process input stream */
-		luaL_Stream stream;
-		Process *handler;
-	} ProcessStream;
-
 	Vis *vis = obj_ref_check(L, 1, "vis");
 	const char *name = luaL_checkstring(L, 2);
 	const char *cmd = luaL_checkstring(L, 3);
-	ProcessStream *inputfd = (ProcessStream *)lua_newuserdata(L, sizeof(ProcessStream));
-	luaL_setmetatable(L, LUA_FILEHANDLE);
-	inputfd->handler = vis_process_communicate(vis, name, cmd, &(inputfd->stream.closef));
-	if (inputfd->handler) {
-		inputfd->stream.f = fdopen(inputfd->handler->inpfd, "w");
-		inputfd->stream.closef = &close_subprocess;
-	}
-	return inputfd->stream.f ? 1 : luaL_fileresult(L, 0, name);
+	Process **owner = lua_newuserdata(L, sizeof *owner);
+	*owner = NULL;
+	luaL_setmetatable(L, VIS_LUA_TYPE_PROCESS);
+	*owner = vis_process_communicate(vis, name, cmd, owner);
+	return *owner ? 1 : luaL_fileresult(L, 0, name);
 }
+
 /***
  * Currently active window.
  * @tfield Window win
@@ -1875,6 +1852,74 @@ static const struct luaL_Reg vis_option_funcs[] = {
 	{"__index",    vis_lua_options_index   },
 	{"__newindex", vis_lua_options_newindex},
 	{0},
+};
+
+/***
+ * The stdin of a process started by @{vis:communicate}.
+ *
+ * The methods match the subset of @{io.file} a writer uses, so code written
+ * against the earlier file handle keeps working.
+ * @type Process
+ */
+static Process **process_check(lua_State *L) {
+	Process **owner = luaL_checkudata(L, 1, VIS_LUA_TYPE_PROCESS);
+	if (!*owner)
+		luaL_error(L, "attempt to use a closed process");
+	return owner;
+}
+/***
+ * Queue data for the process's stdin.
+ *
+ * The call returns at once; the main loop sends the data as the pipe accepts it.
+ * @function write
+ * @tparam string ... the data to send
+ * @treturn Process the process, or nil and a message once its stdin pipe is closed
+ */
+static int process_write(lua_State *L) {
+	Process **owner = process_check(L);
+	int n = lua_gettop(L);
+	for (int i = 2; i <= n; i++) {
+		size_t len;
+		const char *data = luaL_checklstring(L, i, &len);
+		if (!vis_process_write(*owner, data, len)) {
+			lua_pushnil(L);
+			lua_pushliteral(L, "process stdin closed");
+			return 2;
+		}
+	}
+	lua_settop(L, 1);
+	return 1;
+}
+/***
+ * Kept for @{io.file} compatibility: queued data leaves as the process reads it.
+ * @function flush
+ * @treturn Process the process
+ */
+static int process_flush(lua_State *L) {
+	process_check(L);
+	lua_settop(L, 1);
+	return 1;
+}
+/***
+ * Close the process's stdin; the process receives SIGTERM on the next main loop iteration.
+ * Closing a handle whose process already exited is not an error.
+ * @function close
+ * @treturn bool true
+ */
+static int process_close(lua_State *L) {
+	Process **owner = luaL_checkudata(L, 1, VIS_LUA_TYPE_PROCESS);
+	vis_process_release(*owner);
+	*owner = NULL;
+	lua_pushboolean(L, 1);
+	return 1;
+}
+
+static const struct luaL_Reg process_funcs[] = {
+	{ "write", process_write },
+	{ "flush", process_flush },
+	{ "close", process_close },
+	{ "__gc", process_close },
+	{ NULL, NULL },
 };
 
 /***
@@ -3668,6 +3713,11 @@ static void vis_lua_init(Vis *vis)
 	luaL_setfuncs(L, window_selections_funcs, 0);
 
 	obj_type_new(L, str8(VIS_LUA_TYPE_KEYACTION));
+
+	obj_type_new(L, str8(VIS_LUA_TYPE_PROCESS));
+	luaL_setfuncs(L, process_funcs, 0);
+	lua_pushvalue(L, -1);
+	lua_setfield(L, -2, "__index");
 
 	lua_getglobal(L, "vis");
 	lua_getmetatable(L, -1);
