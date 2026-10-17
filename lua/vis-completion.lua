@@ -398,8 +398,22 @@ vis:map(vis.modes.INSERT, completion.keys.prev, function()
 	move(-1)
 end, "Previous completion")
 
+-- Whether a candidate is highlighted and <Enter> would insert it. A
+-- plugin that takes over the accept key checks this and calls
+-- completion.accept() itself.
+function completion.active()
+	return state.shown and state.selected ~= nil
+end
+
+completion.accept = accept
+
+-- Close the list without inserting anything.
+function completion.dismiss()
+	hide(true)
+end
+
 vis:map(vis.modes.INSERT, completion.keys.accept, function()
-	if state.shown and state.selected then
+	if completion.active() then
 		accept()
 	else
 		hide(true)
