@@ -197,6 +197,11 @@ VIS_INTERNAL size_t text_restore(Text*, time_t);
  */
 VIS_INTERNAL time_t text_state(const Text*);
 /**
+ * Counter that changes with every modification of the content, including
+ * undo and redo. Equal values mean the content has not changed in between.
+ */
+VIS_INTERNAL size_t text_generation(const Text*);
+/**
  * @}
  * @defgroup lines Line Operations
  * @{

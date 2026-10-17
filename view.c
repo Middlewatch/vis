@@ -519,6 +519,8 @@ view_draw(View *view)
 		}
 	}
 
+	view->layout_generation = text_generation(view->text);
+	view->layout_start = view->start;
 	view->need_update = true;
 }
 
@@ -1174,7 +1176,11 @@ int view_cursors_cell_set(Selection *s, int cell) {
 void view_cursors_scroll_to(Selection *s, size_t pos) {
 	View *view = s->view;
 	if (view->selection == s) {
-		view_draw(view);
+		/* the viewport check needs a current layout; the insert that
+		 * precedes a typed character has already drawn one */
+		if (view->layout_generation != text_generation(view->text) ||
+		    view->layout_start != view->start)
+			view_draw(view);
 		while (pos < view->start && view_viewport_up(view, 1));
 		while (pos > view->end && view_viewport_down(view, 1));
 	}

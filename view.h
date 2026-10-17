@@ -61,6 +61,8 @@ typedef struct View {
 
 	Line *lines;        /* view->height number of lines representing view content */
 	Line *lastline;     /* last currently used line */
+	size_t layout_generation; /* text_generation() the lines were last laid out from */
+	size_t layout_start;      /* start the lines were last laid out from */
 
 	Selection *selection;    /* primary selection, always placed within the visible viewport */
 	Selection *selection_latest; /* most recently created cursor */

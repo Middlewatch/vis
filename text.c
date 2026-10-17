@@ -94,6 +94,7 @@ struct Text {
 	Revision *last_revision;    /* the last revision added to the tree, chronologically */
 	Revision *saved_revision;   /* the last revision at the time of the save operation */
 	size_t size;            /* current file content size in bytes */
+	size_t generation;      /* bumped on every content change, see text_generation() */
 	struct stat info;       /* stat as probed at load time */
 	LineCache lines;        /* mapping between absolute pos in bytes and logical line breaks */
 	TextChangeHook on_change; /* called around every modification, see text_on_change() */
@@ -436,6 +437,7 @@ static bool text_insert_intern(Vis *vis, Text *txt, size_t pos, const void *data
 		return false;
 	if (pos < txt->lines.pos)
 		lineno_cache_invalidate(&txt->lines);
+	txt->generation++;
 
 	Location loc = piece_get_intern(txt, pos);
 	Piece *p = loc.piece;
@@ -510,6 +512,7 @@ static size_t text_changed_unknown(Text *txt, size_t pos)
 
 static size_t revision_undo(Text *txt, Revision *rev) {
 	size_t pos = EPOS;
+	txt->generation++;
 	for (TextChange *c = rev->change; c; c = c->next) {
 		span_swap(txt, &c->new, &c->old);
 		pos = c->pos;
@@ -519,6 +522,7 @@ static size_t revision_undo(Text *txt, Revision *rev) {
 
 static size_t revision_redo(Text *txt, Revision *rev) {
 	size_t pos = EPOS;
+	txt->generation++;
 	TextChange *c = rev->change;
 	while (c->next)
 		c = c->next;
@@ -623,6 +627,10 @@ time_t text_state(const Text *txt) {
 	return txt->history->time;
 }
 
+size_t text_generation(const Text *txt) {
+	return txt->generation;
+}
+
 VIS_INTERNAL Text *
 vis_text_load(Vis *vis, const char *filename, VisTextLoadMethod method)
 {
@@ -687,6 +695,7 @@ static bool text_delete_intern(Text *txt, size_t pos, size_t len) {
 		return false;
 	if (pos < txt->lines.pos)
 		lineno_cache_invalidate(&txt->lines);
+	txt->generation++;
 
 	Location loc = piece_get_intern(txt, pos);
 	Piece *p = loc.piece;
