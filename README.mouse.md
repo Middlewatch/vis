@@ -350,6 +350,24 @@ or a save supersedes it; edits made before that choice are not
 journaled. Unnamed files are not journaled, and the `:ls` and `:help`
 windows are internal scratch files with no number and no journal.
 
+## Paste
+
+The terminal layer turns on bracketed paste (`\e[?2004h`) when the
+screen is set up and after a resume, and off before a suspend, before a
+fullscreen command and at exit. A paste then arrives framed in `CSI 200~`
+and `CSI 201~`, and `getkey` in `vis.c` collects the keys in between and
+inserts the text as one change at every cursor: in insert and replace
+mode as if typed, in any other mode without running the keys as commands.
+Upstream types a paste key by key, which redraws per character, runs a
+normal-mode paste as commands and sends a language server one `didChange`
+per character; 59 KB took six seconds without a server and twice that
+with clangd. The same paste now lands in a few milliseconds and reaches
+the server as one change.
+
+The text is not recorded in macros. The `TERM_CSI` event does not see the
+two markers. A paste whose end marker never arrives ends one second after
+the terminal stops sending.
+
 ## LSP
 
 The fork carries no LSP code. It uses vis-lspc
@@ -371,6 +389,17 @@ second hands a request's raw method result to its `on_result`
 callback. Both stay local: vis-lspc's README forbids contributions
 created or modified with an LLM, and these were. The owner's dotfiles
 keep the copy as plain files with the patches beside it.
+
+`vis:communicate` returns a process handle with `write`, `flush` and
+`close`, the subset of `io.file` vis-lspc uses, rather than upstream's
+`FILE*` on a blocking pipe. `write` queues the data and the main loop
+sends it as the pipe accepts it (`vis-subprocess.c`). The blocking pipe
+deadlocked the editor: a server stops reading its stdin while its own
+stdout pipe to vis is full, vis only drains that pipe from the main loop,
+and a burst of per-keystroke `didChange` notifications filled both. The
+editor sat in `write()` and zls in `writev()`. A write that fails closes
+the pipe; later writes return `nil` and a message, and a closed handle
+raises like a closed file.
 
 Servers come from `PATH`. lspc preconfigures zls, lua-language-server,
 clangd, gopls and bash-language-server; `~/.config/vis/visrc.lua` adds
