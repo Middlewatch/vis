@@ -32,13 +32,17 @@ local config = os.getenv('XDG_CONFIG_HOME') or (home .. '/.config')
 
 --- Grammar locations tried in order, with %s for the grammar name. The
 -- tree_sitter/ directory is neovim's layout; the libtree-sitter-<name>
--- form is what grammar packages install when they skip the symlink.
+-- form is what grammar packages install when they skip the symlink;
+-- lib64 is where Fedora puts both (its unversioned libtree-sitter-<name>.so
+-- comes from the grammar's -devel package).
 M.grammar_paths = {
 	home .. '/.local/lib/tree_sitter/%s.so',
 	'/usr/local/lib/tree_sitter/%s.so',
 	'/usr/lib/tree_sitter/%s.so',
+	'/usr/lib64/tree_sitter/%s.so',
 	'/usr/local/lib/libtree-sitter-%s.so',
 	'/usr/lib/libtree-sitter-%s.so',
+	'/usr/lib64/libtree-sitter-%s.so',
 }
 
 --- Directories searched for <name>/highlights.scm, in order.
