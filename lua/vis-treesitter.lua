@@ -122,7 +122,7 @@ local function query_source(name, paths, seen)
 	local src = read_file(path)
 	paths[#paths + 1] = path
 	local parts = {}
-	for list in src:gmatch(';+%s*inherits%s*:%s*([%w_,%s]+)') do
+	for list in src:gmatch(';+[ \t]*inherits[ \t]*:[ \t]*([%w_, \t]+)') do
 		for parent in list:gmatch('[%w_]+') do
 			parts[#parts + 1] = query_source(parent, paths, seen) or ''
 		end
@@ -168,15 +168,17 @@ local function pattern_spans(src)
 	return spans
 end
 
--- compile src for lang, blanking patterns the grammar rejects
+-- compile src for lang, blanking patterns the grammar rejects. Blanking
+-- keeps every byte offset, so the spans are computed once.
 local function compile(lang, src)
 	local dropped = {}
+	local spans = pattern_spans(src)
 	for _ = 1, 200 do
 		local query, kind, offset = core.query(lang, src)
 		if query then return query, dropped end
 		local pos = offset + 1
 		local span
-		for _, s in ipairs(pattern_spans(src)) do
+		for _, s in ipairs(spans) do
 			if s[1] <= pos and pos <= s[2] then span = s break end
 		end
 		if not span then
