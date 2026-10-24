@@ -320,4 +320,10 @@ vis.types.file.match_at = function(file, pattern, pos, horizon)
 	end
 end
 
+-- tree-sitter highlighting when the binary carries the binding
+-- (vis-treesitter.c registers it in package.preload)
+if package.preload.treesitter then
+	vis.treesitter = require('vis-treesitter')
+end
+
 require('vis-std')

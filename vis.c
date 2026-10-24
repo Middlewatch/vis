@@ -17,6 +17,7 @@
 #include "ui-terminal.c"
 #include "view.c"
 #include "vis-lua.c"
+#include "vis-treesitter.c"
 #include "vis-marks.c"
 #include "vis-modes.c"
 #include "vis-motions.c"

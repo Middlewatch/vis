@@ -28,6 +28,7 @@ Optional features:
   --enable-lua            build with Lua support [auto]
   --enable-lpeg-static    build with LPeg static linking [auto]
   --enable-tre            build with TRE regex support [auto]
+  --enable-tree-sitter    build with tree-sitter highlighting (needs Lua) [auto]
   --enable-selinux        build with SELinux support [auto]
   --enable-static         statically link vis dependencies [no]
   --enable-acl            build with POSIX ACL support [auto]
@@ -127,6 +128,7 @@ curses=yes
 lua=auto
 lpeg=auto
 tre=auto
+tree_sitter=auto
 selinux=auto
 acl=auto
 
@@ -151,6 +153,8 @@ case "$arg" in
 --disable-lpeg-static|--enable-lpeg-static=no) lpeg=no ;;
 --enable-tre|--enable-tre=yes) tre=yes ;;
 --disable-tre|--enable-tre=no) tre=no ;;
+--enable-tree-sitter|--enable-tree-sitter=yes) tree_sitter=yes ;;
+--disable-tree-sitter|--enable-tree-sitter=no) tree_sitter=no ;;
 --enable-selinux|--enable-selinux=yes) selinux=yes ;;
 --disable-selinux|--enable-selinux=no) selinux=no ;;
 --enable-static|--enable-static=yes) static=yes ;;
@@ -605,6 +609,45 @@ EOF
 	fi
 fi
 
+# tree-sitter highlighting is a Lua module
+test "$tree_sitter" = "yes" -a "$lua" = "no" && fail "$0: need lua support for tree-sitter"
+
+if test -n "${CFLAGS_LUA}" -a "$tree_sitter" != "no" ; then
+
+	printf "checking for libtree-sitter... "
+
+cat > "$tmpc" <<EOF
+#include <tree_sitter/api.h>
+
+int main(int argc, char *argv[]) {
+	TSParser *parser = ts_parser_new();
+	ts_parser_delete(parser);
+	return TREE_SITTER_LANGUAGE_VERSION;
+}
+EOF
+
+	if test "$have_pkgconfig" = "yes" ; then
+		CFLAGS_TREE_SITTER=$($PKG_CONFIG $pkg_config_flags --cflags tree-sitter 2>/dev/null)
+		LDFLAGS_TREE_SITTER=$($PKG_CONFIG $pkg_config_flags --libs tree-sitter 2>/dev/null)
+	fi
+
+	if test -z "$LDFLAGS_TREE_SITTER"; then
+		CFLAGS_TREE_SITTER=""
+		LDFLAGS_TREE_SITTER="-ltree-sitter"
+	fi
+
+	if $CC $CFLAGS $CFLAGS_TREE_SITTER "$tmpc" \
+		$LDFLAGS $LDFLAGS_TREE_SITTER -o "$tmpo" >/dev/null 2>&1; then
+		CFLAGS_TREE_SITTER="${CFLAGS_TREE_SITTER} -DCONFIG_TREE_SITTER=1"
+		printf "%s\n" "yes"
+	else
+		printf "%s\n" "no"
+		CFLAGS_TREE_SITTER=""
+		LDFLAGS_TREE_SITTER=""
+		test "$tree_sitter" = "yes" && fail "$0: cannot find libtree-sitter"
+	fi
+fi
+
 printf "completing config.mk... "
 
 exec 3>&1 1>>config.mk
@@ -619,6 +662,8 @@ CFLAGS_LUA = $CFLAGS_LUA
 LDFLAGS_LUA = $LDFLAGS_LUA
 CFLAGS_LPEG = $CFLAGS_LPEG
 LDFLAGS_LPEG = $LDFLAGS_LPEG
+CFLAGS_TREE_SITTER = $CFLAGS_TREE_SITTER
+LDFLAGS_TREE_SITTER = $LDFLAGS_TREE_SITTER
 CFLAGS_ACL = $CFLAGS_ACL
 LDFLAGS_ACL = $LDFLAGS_ACL
 CFLAGS_SELINUX = $CFLAGS_SELINUX

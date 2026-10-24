@@ -36,6 +36,15 @@ Efficient syntax highlighting is provided using
 [Parsing Expression Grammars](https://en.wikipedia.org/wiki/Parsing_expression_grammar),
 which can be conveniently expressed using [Lua](http://www.lua.org/)
 in the form of [LPeg](http://www.inf.puc-rio.br/~roberto/lpeg/).
+This fork adds [tree-sitter](https://tree-sitter.github.io/) highlighting
+(`--enable-tree-sitter`): a language with a grammar in
+`/usr/lib/tree_sitter/<name>.so` is parsed into a syntax tree, kept
+current through incremental reparses, and styled by an nvim-treesitter
+style `highlights.scm` from `~/.config/vis/queries/<name>/` or
+`/usr/share/tree-sitter/queries/<name>/`; every other language keeps
+its LPeg lexer. `:treesitter` reports the grammar, queries, parse time
+and any patterns the installed grammar rejected. A capture `@a.b.c`
+takes the theme's `STYLE_A_B_C`, then `STYLE_A_B`, then `STYLE_A`.
 
 The editor core is written in a reasonable amount of clean (your mileage
 may vary), modern and legacy-free C code, enabling it to run in
@@ -68,6 +77,8 @@ compatible environment as well as:
  * [LPeg](http://www.inf.puc-rio.br/~roberto/lpeg/) >= 0.12
    (optional runtime dependency required for syntax highlighting)
  * [TRE](http://laurikari.net/tre/) (optional for more memory efficient regex search)
+ * [tree-sitter](https://tree-sitter.github.io/) >= 0.25 (optional, with Lua,
+   for tree-sitter highlighting; grammars are loaded at runtime)
 
 Assuming these dependencies are met, execute:
 

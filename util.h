@@ -26,6 +26,9 @@
 #ifndef CONFIG_TRE
   #define CONFIG_TRE 0
 #endif
+#ifndef CONFIG_TREE_SITTER
+  #define CONFIG_TREE_SITTER 0
+#endif
 #ifndef CONFIG_SELINUX
   #define CONFIG_SELINUX 0
 #endif

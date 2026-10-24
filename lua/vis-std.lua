@@ -48,6 +48,7 @@ vis:option_register("theme", "string", function(name)
 	ui:style_define(ui.style_ids.EOF,               lexers.STYLE_EOF               or '')
 	ui:style_define(ui.style_ids.WHITESPACE,        lexers.STYLE_WHITESPACE        or '')
 
+	if vis.treesitter then vis.treesitter.reset_styles() end
 	for win in vis:windows() do
 		win:set_syntax(win.syntax)
 	end
@@ -70,6 +71,9 @@ vis:option_register("horizon", "number", function(horizon)
 end, "Number of bytes to consider for syntax highlighting")
 
 vis.events.subscribe(vis.events.WIN_HIGHLIGHT, function(win)
+	-- tree-sitter owns every syntax it has a grammar for; the LPeg lexer
+	-- below is the fallback (see vis-treesitter.lua)
+	if vis.treesitter and vis.treesitter.highlight(win) then return end
 	if not win.syntax or not vis.lexers.load then return end
 	local lexer = vis.lexers.load(win.syntax, nil, true)
 	if not lexer then return end
