@@ -337,7 +337,8 @@ function mouse.chord_release(ms)
 		vis:info("Selection copied to clipboard")
 	elseif (chordbase == BUTTON.LEFT and button == BUTTON.MIDDLE) then
 		-- paste
-		local _, paste = vis:pipe("vis-clipboard --paste")
+		local status, paste = vis:pipe("vis-clipboard --paste")
+		if status ~= 0 or not paste or #paste == 0 then return end
 		local oldpos = selection.pos
 		vis:insert(paste)
 		local newpos = selection.pos
