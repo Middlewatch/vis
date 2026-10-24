@@ -99,6 +99,20 @@ vis_file_discard(Vis *vis, File *file)
 	vis_file_free(vis, file);
 }
 
+/* The window stops showing its file. An unnamed, untouched file leaves
+ * nothing to keep as a hidden buffer and goes; any other stays. */
+static void
+vis_window_release_file(Vis *vis, Win *win)
+{
+	File *file = win->file;
+	file->last_pos = view_cursor_get(&win->view);
+	if (!file->internal && file->refcount <= 1 && file->filepath.length == 0 &&
+	    !text_modified(file->text))
+		vis_file_free(vis, file);
+	else
+		vis_file_unref(vis, file);
+}
+
 VIS_INTERNAL File *
 vis_files_modified(Vis *vis)
 {
@@ -583,8 +597,7 @@ vis_window_file_change(Vis *vis, Win *win, const char *filename)
 {
 	File *file = vis_file_new(vis, filename, 0);
 	if (file) {
-		win->file->last_pos = view_cursor_get(&win->view);
-		vis_file_unref(vis, win->file);
+		vis_window_release_file(vis, win);
 		win->file = file;
 		view_reload(&win->view, file->text);
 	}
@@ -742,13 +755,7 @@ void vis_window_close(Win *win) {
 		return;
 	Vis *vis = win->vis;
 	vis_event_emit(vis, VIS_EVENT_WIN_CLOSE, win);
-	File *file = win->file;
-	file->last_pos = view_cursor_get(&win->view);
-	if (!file->internal && file->refcount <= 1 && file->filepath.length == 0 &&
-	    !text_modified(file->text))
-		vis_file_free(vis, file); /* an unnamed, untouched file leaves nothing to keep */
-	else
-		vis_file_unref(vis, file);
+	vis_window_release_file(vis, win);
 	if (win->prev)
 		win->prev->next = win->next;
 	if (win->next)

@@ -24,6 +24,14 @@ describe("buffers", function()
 		assert.truthy(vis.win.file.number ~= before)
 	end)
 
+	it("win.file = path from an unnamed, untouched buffer keeps no hidden buffer", function()
+		vis:command("open")
+		local unnamed = vis.win.file.number
+		vis.win.file = in_file.path
+		assert.are.equal(in_file.path, vis.win.file.path)
+		for f in vis:files() do assert.truthy(f.number ~= unnamed) end
+	end)
+
 	it(":e of an existing file with shell characters opens it literally", function()
 		local dir = os.tmpname()
 		os.remove(dir)
