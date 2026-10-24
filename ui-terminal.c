@@ -806,6 +806,7 @@ ui_terminal_free(Ui *tui)
 	free(tui->term.data);
 	buffer_release(&tui->overlay.text);
 	free(tui->overlay.lines.data);
+	free(tui->overlay.segments.data);
 }
 
 VIS_INTERNAL bool
